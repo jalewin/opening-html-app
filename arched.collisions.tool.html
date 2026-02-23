@@ -1,0 +1,2226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arched Collision Tool</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #1b2430;
+      --muted: #5e6a7a;
+      --accent: #0d6efd;
+      --accent-2: #0852ba;
+      --danger: #ad1a2b;
+      --line: #d8deea;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 5% 0%, #eaf4ff 0, transparent 40%),
+        radial-gradient(circle at 100% 100%, #eef8f0 0, transparent 35%),
+        var(--bg);
+    }
+
+    .shell {
+      max-width: 1360px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .title {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .title h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .inputs {
+      display: grid;
+      gap: 12px;
+      max-height: calc(100vh - 80px);
+      overflow: auto;
+    }
+
+    fieldset {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    legend {
+      padding: 0 5px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+    }
+
+    input,
+    select,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 9px;
+      font-size: 13px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-2);
+    }
+
+    .btn-ghost {
+      background: #eef2f8;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    #status {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #status.error {
+      color: var(--danger);
+    }
+
+    .plot-wrap {
+      display: grid;
+      gap: 10px;
+    }
+
+    #plot3d,
+    #plot2d {
+      height: 56vh;
+      min-height: 420px;
+    }
+
+    #plot2d {
+      display: none;
+    }
+
+    .views-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .view-card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #fbfcff;
+      display: grid;
+      gap: 6px;
+      position: relative;
+    }
+
+    .view-card h3 {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .view-plot {
+      height: 320px;
+      min-height: 320px;
+    }
+
+    .front-hover-summary {
+      position: absolute;
+      display: none;
+      min-width: 190px;
+      max-width: 250px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #cdd7e6;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(20, 34, 61, 0.14);
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #1f2937;
+      line-height: 1.35;
+      pointer-events: none;
+      z-index: 12;
+      white-space: normal;
+    }
+
+    .front-hover-summary .k {
+      color: #5a677a;
+    }
+
+    .front-hover-summary .t {
+      font-weight: 700;
+      color: #1b2430;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 10px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1150px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .inputs {
+        max-height: none;
+      }
+
+      #plot3d,
+      #plot2d {
+        height: 64vh;
+        min-height: 460px;
+      }
+
+      .views-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .view-plot {
+        height: 340px;
+        min-height: 340px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="title">
+      <h1>Arched Collision Tool</h1>
+      <p>Single-file browser app for max opening angle and 3D geometry visualization.</p>
+    </section>
+
+    <section class="layout">
+      <aside class="panel inputs">
+        <fieldset>
+          <legend>Opening</legend>
+          <div class="grid-2">
+            <label>Width
+              <input id="opening_width" type="number" step="any" value="1800">
+            </label>
+            <label>Depth
+              <input id="opening_depth" type="number" step="any" value="600">
+            </label>
+            <label>Spring height
+              <input id="opening_spring_height" type="number" step="any" value="2000">
+            </label>
+            <label>Arch rise
+              <input id="opening_arch_rise" type="number" step="any" value="400">
+            </label>
+            <label>Center X
+              <input id="opening_center_x" type="number" step="any" value="0">
+            </label>
+            <label>Arch type
+              <select id="opening_arch_type">
+                <option value="none">none (rectangular)</option>
+                <option value="circular">circular</option>
+                <option value="elliptic">elliptic</option>
+                <option value="superellipse">superellipse</option>
+              </select>
+            </label>
+            <label id="opening_super_n_row">Super n
+              <input id="opening_super_n" type="number" step="any" value="2">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Window</legend>
+          <div class="grid-2">
+            <label>Width
+              <input id="window_width" type="number" step="any" value="1400">
+            </label>
+            <label>Thickness
+              <input id="window_thickness" type="number" step="any" value="70">
+            </label>
+            <label>Spring height
+              <input id="window_spring_height" type="number" step="any" value="1900">
+            </label>
+            <label>Arch rise
+              <input id="window_arch_rise" type="number" step="any" value="350">
+            </label>
+            <label>Bottom offset
+              <input id="window_bottom_offset" type="number" step="any" value="50">
+            </label>
+            <label>Center offset X
+              <input id="window_center_offset_x" type="number" step="any" value="0">
+            </label>
+            <label>Inner pane depth
+              <input id="window_hinge_depth" type="number" step="any" value="250">
+            </label>
+            <label>Hinge x-offset
+              <input id="window_hinge_x_offset" type="number" step="any" value="-10">
+            </label>
+            <label>Hinge z-offset (from inner pane)
+              <input id="window_hinge_z_offset" type="number" step="any" value="-10">
+            </label>
+            <label>Hinge side
+              <select id="window_hinge_side">
+                <option value="left">left</option>
+                <option value="right">right</option>
+              </select>
+            </label>
+            <label>Arch type
+              <select id="window_arch_type">
+                <option value="none">none (rectangular)</option>
+                <option value="circular">circular</option>
+                <option value="elliptic">elliptic</option>
+                <option value="superellipse">superellipse</option>
+              </select>
+            </label>
+            <label id="window_super_n_row">Super n
+              <input id="window_super_n" type="number" step="any" value="2">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Solver And Plot</legend>
+          <div class="inline">
+            <input id="auto_angle" type="checkbox" checked>
+            <label for="auto_angle">Auto-compute max angle</label>
+          </div>
+          <div class="inline">
+            <input id="auto_render" type="checkbox" checked>
+            <label for="auto_render">Auto-render pending changes</label>
+          </div>
+          <div class="grid-2">
+            <label>Manual angle deg
+              <input id="manual_angle_deg" type="number" step="any" value="45" disabled>
+            </label>
+            <label>Theta upper deg
+              <input id="theta_upper_deg" type="number" step="any" value="120">
+            </label>
+            <label>Tol deg
+              <input id="tol_deg" type="number" step="any" value="0.05">
+            </label>
+            <label>Ny solve
+              <input id="ny_solve" type="number" step="1" value="400">
+            </label>
+            <label>Ny plot
+              <input id="ny_plot" type="number" step="1" value="300">
+            </label>
+            <label>Auto-render sec
+              <input id="auto_render_sec" type="number" step="1" min="1" value="3">
+            </label>
+          </div>
+          <label>Surface transparency <span id="surface_transparency_label">65%</span>
+            <input id="surface_transparency" type="range" min="0" max="95" step="1" value="65">
+          </label>
+        </fieldset>
+
+        <div class="btn-row">
+          <button id="render_btn" class="btn-primary" type="button">Render</button>
+          <button id="export_pdf_btn" class="btn-primary" type="button">Export Views PDF</button>
+          <button id="reset_btn" class="btn-ghost" type="button">Reset Example</button>
+        </div>
+        <div id="status"></div>
+        <div class="hint">
+          If WebGL is unavailable, the app auto-renders XY and XZ 2D fallback plots.
+        </div>
+      </aside>
+
+      <main class="panel plot-wrap">
+        <div id="plot3d"></div>
+        <div id="plot2d"></div>
+        <section class="views-grid">
+          <article class="view-card">
+            <h3>Front View (Closed Window)</h3>
+            <div id="front_view" class="view-plot"></div>
+            <div id="front_hover_summary" class="front-hover-summary"></div>
+          </article>
+          <article class="view-card">
+            <h3>Side Section (Depth)</h3>
+            <div id="side_view" class="view-plot"></div>
+          </article>
+          <article class="view-card">
+            <h3>Top View (Open To Angle)</h3>
+            <div id="top_view" class="view-plot"></div>
+          </article>
+        </section>
+      </main>
+    </section>
+  </div>
+
+  <script>
+    "use strict";
+
+    const DEFAULTS = {
+      opening_width: 1800,
+      opening_spring_height: 2000,
+      opening_arch_rise: 400,
+      opening_depth: 600,
+      opening_center_x: 0,
+      opening_arch_type: "circular",
+      opening_super_n: 2,
+      window_width: 1400,
+      window_spring_height: 1900,
+      window_arch_rise: 350,
+      window_thickness: 70,
+      window_bottom_offset: 50,
+      window_center_offset_x: 0,
+      window_hinge_depth: 250,
+      window_hinge_x_offset: -10,
+      window_hinge_z_offset: -10,
+      window_hinge_side: "left",
+      window_arch_type: "circular",
+      window_super_n: 2,
+      auto_angle: true,
+      auto_render: true,
+      manual_angle_deg: 45,
+      theta_upper_deg: 120,
+      tol_deg: 0.05,
+      ny_solve: 400,
+      ny_plot: 300,
+      auto_render_sec: 3,
+      surface_transparency: 65
+    };
+
+    const COLORS = {
+      opening0: "#1f77b4",
+      openingT: "#2ca02c",
+      face1: "#d62728",
+      face2: "#ff7f0e",
+      hinge: "#111111",
+      openingSurface: "#6fa8dc",
+      windowSurface: "#e48f4a"
+    };
+
+    const STATIC_VIEW_CONFIG = {
+      responsive: true,
+      displaylogo: false,
+      displayModeBar: false,
+      staticPlot: true
+    };
+
+    const FRONT_VIEW_CONFIG = {
+      responsive: true,
+      displaylogo: false,
+      displayModeBar: false,
+      staticPlot: false
+    };
+
+    let LAST_RENDER = null;
+    const APP_STATE = {
+      dirty: true,
+      renderInFlight: false,
+      lastRenderAt: 0
+    };
+
+    function deg(rad) {
+      return rad * 180 / Math.PI;
+    }
+
+    function rad(degVal) {
+      return degVal * Math.PI / 180;
+    }
+
+    function linspace(a, b, n) {
+      const out = [];
+      if (n <= 1) {
+        out.push(a);
+        return out;
+      }
+      const step = (b - a) / (n - 1);
+      for (let i = 0; i < n; i += 1) {
+        out.push(a + i * step);
+      }
+      return out;
+    }
+
+    function archBoundary(y, width, springHeight, archRise, centerX, archType, superN) {
+      const totalHeight = springHeight + archRise;
+      if (y < 0 || y > totalHeight) {
+        return { left: NaN, right: NaN };
+      }
+
+      const halfW = width / 2;
+      if (y <= springHeight) {
+        return { left: centerX - halfW, right: centerX + halfW };
+      }
+      if (archType === "none") {
+        return { left: centerX - halfW, right: centerX + halfW };
+      }
+
+      const u = y - springHeight;
+      let hw = NaN;
+
+      if (archType === "circular") {
+        const R = (halfW * halfW + archRise * archRise) / (2 * archRise);
+        const c0 = archRise - R;
+        const inside = R * R - (u - c0) * (u - c0);
+        hw = inside < 0 ? 0 : Math.sqrt(inside);
+      } else if (archType === "elliptic") {
+        const inside = 1 - (u / archRise) * (u / archRise);
+        hw = inside < 0 ? 0 : halfW * Math.sqrt(inside);
+      } else if (archType === "superellipse") {
+        const inside = 1 - Math.pow(u / archRise, superN);
+        hw = inside < 0 ? 0 : halfW * Math.pow(inside, 1 / superN);
+      } else {
+        throw new Error("Unknown arch type: " + archType);
+      }
+
+      return { left: centerX - hw, right: centerX + hw };
+    }
+
+    function rotateAboutHinge(x, z, hingeX, hingeZ, theta) {
+      const ct = Math.cos(theta);
+      const st = Math.sin(theta);
+      const dx = x - hingeX;
+      const dz = z - hingeZ;
+      return {
+        x: hingeX + ct * dx + st * dz,
+        z: hingeZ - st * dx + ct * dz
+      };
+    }
+
+    function hingeXFromSide(windowCenterX, windowWidth, hingeSide, hingeXOffset) {
+      const base = hingeSide === "left"
+        ? windowCenterX - windowWidth / 2
+        : windowCenterX + windowWidth / 2;
+      return base + hingeXOffset;
+    }
+
+    function inwardTheta(theta, hingeSide) {
+      return hingeSide === "right" ? -theta : theta;
+    }
+
+    function collisionAtTheta(theta, p, Ny) {
+      const windowTotalHeight = p.window_spring_height + p.window_arch_rise;
+      const openingTotalHeight = p.opening_spring_height + p.opening_arch_rise;
+      const y0 = p.window_bottom_offset;
+      const y1 = y0 + windowTotalHeight;
+
+      if (y1 > openingTotalHeight) {
+        return true;
+      }
+
+      const windowCenterX = p.opening_center_x + p.window_center_offset_x;
+      const hingeXClosed = hingeXFromSide(
+        windowCenterX,
+        p.window_width,
+        p.window_hinge_side,
+        p.window_hinge_x_offset
+      );
+      const innerPaneZ = p.window_hinge_depth;
+      const hingeZ = innerPaneZ + p.window_hinge_z_offset;
+      const thetaOpen = inwardTheta(theta, p.window_hinge_side);
+      const ys = linspace(y0, y1, Ny);
+
+      for (const y of ys) {
+        const openBounds = archBoundary(
+          y,
+          p.opening_width,
+          p.opening_spring_height,
+          p.opening_arch_rise,
+          p.opening_center_x,
+          p.opening_arch_type,
+          p.opening_super_n
+        );
+        if (Number.isNaN(openBounds.left) || Number.isNaN(openBounds.right)) {
+          return true;
+        }
+
+        const yLocal = y - p.window_bottom_offset;
+        const winBounds = archBoundary(
+          yLocal,
+          p.window_width,
+          p.window_spring_height,
+          p.window_arch_rise,
+          windowCenterX,
+          p.window_arch_type,
+          p.window_super_n
+        );
+        if (Number.isNaN(winBounds.left) || Number.isNaN(winBounds.right)) {
+          continue;
+        }
+
+        const xEdges = [winBounds.left, winBounds.right];
+        const zFaces = [
+          innerPaneZ,
+          innerPaneZ + p.window_thickness
+        ];
+
+        for (const x of xEdges) {
+          for (const z of zFaces) {
+            const rot = rotateAboutHinge(x, z, hingeXClosed, hingeZ, thetaOpen);
+            const insideWall = rot.z >= 0 && rot.z <= p.opening_depth;
+            const outsideOpening = rot.x < openBounds.left || rot.x > openBounds.right;
+            if (insideWall && outsideOpening) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    }
+
+    function computeMaxOpenAngle(p) {
+      let thetaLow = 0;
+      let thetaHigh = rad(p.theta_upper_deg);
+      const tol = rad(p.tol_deg);
+
+      if (collisionAtTheta(0, p, p.ny_solve)) {
+        return { max_angle_deg: 0, note: "Collision at 0 deg" };
+      }
+
+      if (!collisionAtTheta(thetaHigh, p, p.ny_solve)) {
+        return { max_angle_deg: p.theta_upper_deg, note: "No collision up to upper bound" };
+      }
+
+      while ((thetaHigh - thetaLow) > tol) {
+        const mid = (thetaLow + thetaHigh) / 2;
+        if (collisionAtTheta(mid, p, p.ny_solve)) {
+          thetaHigh = mid;
+        } else {
+          thetaLow = mid;
+        }
+      }
+
+      return { max_angle_deg: deg(thetaLow), note: "Maximum collision-free angle" };
+    }
+
+    function buildArchOutlineAtZ(zValue, width, springHeight, archRise, centerX, archType, superN, yOffset, nyPlot) {
+      if (archType === "none") {
+        const left = centerX - width / 2;
+        const right = centerX + width / 2;
+        const y0 = yOffset;
+        const y1 = yOffset + springHeight + archRise;
+        return {
+          x: [left, right, right, left, left],
+          y: [y0, y0, y1, y1, y0],
+          z: [zValue, zValue, zValue, zValue, zValue]
+        };
+      }
+      const totalHeight = springHeight + archRise;
+      const ys = linspace(0, totalHeight, nyPlot);
+      const lefts = [];
+      const rights = [];
+
+      for (const y of ys) {
+        const b = archBoundary(y, width, springHeight, archRise, centerX, archType, superN);
+        lefts.push(b.left);
+        rights.push(b.right);
+      }
+
+      const x = lefts.concat(rights.slice().reverse(), [lefts[0]]);
+      const y = ys.concat(ys.slice().reverse(), [ys[0]]).map(v => v + yOffset);
+      const z = new Array(x.length).fill(zValue);
+      return { x, y, z };
+    }
+
+    function rotateOutlineAboutHinge(df, hingeX, hingeZ, theta) {
+      const x = [];
+      const z = [];
+      for (let i = 0; i < df.x.length; i += 1) {
+        const rot = rotateAboutHinge(df.x[i], df.z[i], hingeX, hingeZ, theta);
+        x.push(rot.x);
+        z.push(rot.z);
+      }
+      return { x, y: df.y.slice(), z };
+    }
+
+    function buildGeometry(p, angleDeg) {
+      const theta = rad(angleDeg);
+      const thetaOpen = inwardTheta(theta, p.window_hinge_side);
+      const openingZ0 = buildArchOutlineAtZ(
+        0,
+        p.opening_width,
+        p.opening_spring_height,
+        p.opening_arch_rise,
+        p.opening_center_x,
+        p.opening_arch_type,
+        p.opening_super_n,
+        0,
+        p.ny_plot
+      );
+      const openingZT = buildArchOutlineAtZ(
+        p.opening_depth,
+        p.opening_width,
+        p.opening_spring_height,
+        p.opening_arch_rise,
+        p.opening_center_x,
+        p.opening_arch_type,
+        p.opening_super_n,
+        0,
+        p.ny_plot
+      );
+
+      const windowCenterX = p.opening_center_x + p.window_center_offset_x;
+      const windowTotalHeight = p.window_spring_height + p.window_arch_rise;
+      const hingeXClosed = hingeXFromSide(
+        windowCenterX,
+        p.window_width,
+        p.window_hinge_side,
+        p.window_hinge_x_offset
+      );
+      const innerPaneZ = p.window_hinge_depth;
+      const hingeZ = innerPaneZ + p.window_hinge_z_offset;
+      const zFaces = [innerPaneZ, innerPaneZ + p.window_thickness];
+
+      const windowFace1 = buildArchOutlineAtZ(
+        zFaces[0],
+        p.window_width,
+        p.window_spring_height,
+        p.window_arch_rise,
+        windowCenterX,
+        p.window_arch_type,
+        p.window_super_n,
+        p.window_bottom_offset,
+        p.ny_plot
+      );
+      const windowFace2 = buildArchOutlineAtZ(
+        zFaces[1],
+        p.window_width,
+        p.window_spring_height,
+        p.window_arch_rise,
+        windowCenterX,
+        p.window_arch_type,
+        p.window_super_n,
+        p.window_bottom_offset,
+        p.ny_plot
+      );
+
+      const windowFace1Rot = rotateOutlineAboutHinge(windowFace1, hingeXClosed, hingeZ, thetaOpen);
+      const windowFace2Rot = rotateOutlineAboutHinge(windowFace2, hingeXClosed, hingeZ, thetaOpen);
+
+      const hingeLine = {
+        x: [hingeXClosed, hingeXClosed],
+        y: [p.window_bottom_offset, p.window_bottom_offset + windowTotalHeight],
+        z: [hingeZ, hingeZ]
+      };
+
+      return {
+        openingZ0,
+        openingZT,
+        windowFace1Rot,
+        windowFace2Rot,
+        hingeLine
+      };
+    }
+
+    function trace3d(df, name, color) {
+      return {
+        x: df.x,
+        y: df.y,
+        z: df.z,
+        type: "scatter3d",
+        mode: "lines",
+        name: name,
+        line: { color: color, width: 4 }
+      };
+    }
+
+    function mesh3dFromOutline(df, name, color, opacity) {
+      const n = df.x.length;
+      if (n < 4) {
+        return null;
+      }
+
+      const x = df.x.slice(0, n - 1);
+      const y = df.y.slice(0, n - 1);
+      const z = df.z.slice(0, n - 1);
+
+      const m = x.length;
+      let cx = 0;
+      let cy = 0;
+      let cz = 0;
+      for (let idx = 0; idx < m; idx += 1) {
+        cx += x[idx];
+        cy += y[idx];
+        cz += z[idx];
+      }
+      cx /= m;
+      cy /= m;
+      cz /= m;
+
+      x.push(cx);
+      y.push(cy);
+      z.push(cz);
+      const cidx = m;
+
+      const i = [];
+      const j = [];
+      const k = [];
+      for (let idx = 0; idx < m; idx += 1) {
+        i.push(idx);
+        j.push((idx + 1) % m);
+        k.push(cidx);
+      }
+
+      return {
+        type: "mesh3d",
+        x: x,
+        y: y,
+        z: z,
+        i: i,
+        j: j,
+        k: k,
+        name: name,
+        color: color,
+        opacity: opacity,
+        hoverinfo: "skip",
+        flatshading: true,
+        showscale: false,
+        showlegend: false,
+        lighting: {
+          ambient: 0.7,
+          diffuse: 0.6,
+          fresnel: 0.1,
+          specular: 0.2,
+          roughness: 0.9
+        }
+      };
+    }
+
+    function trace2dXY(df, name, color) {
+      return {
+        x: df.x,
+        y: df.y,
+        type: "scatter",
+        mode: "lines",
+        name: name + " XY",
+        line: { color: color, width: 2 },
+        xaxis: "x",
+        yaxis: "y",
+        legendgroup: name
+      };
+    }
+
+    function trace2dXZ(df, name, color) {
+      return {
+        x: df.x,
+        y: df.z,
+        type: "scatter",
+        mode: "lines",
+        name: name + " XZ",
+        line: { color: color, width: 2, dash: "dot" },
+        xaxis: "x2",
+        yaxis: "y2",
+        legendgroup: name
+      };
+    }
+
+    function fmtMm(val) {
+      if (!Number.isFinite(val)) {
+        return "n/a";
+      }
+      const rounded = Math.round(val * 100) / 100;
+      return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+    }
+
+    function getPlacement(p) {
+      const windowCenterX = p.opening_center_x + p.window_center_offset_x;
+      const windowTotalHeight = p.window_spring_height + p.window_arch_rise;
+      const openingTotalHeight = p.opening_spring_height + p.opening_arch_rise;
+      const hingeXClosed = hingeXFromSide(
+        windowCenterX,
+        p.window_width,
+        p.window_hinge_side,
+        p.window_hinge_x_offset
+      );
+      const innerPaneZ = p.window_hinge_depth;
+      const hingeZ = innerPaneZ + p.window_hinge_z_offset;
+      const zNear = innerPaneZ;
+      const zFar = innerPaneZ + p.window_thickness;
+      const windowLeft = windowCenterX - p.window_width / 2;
+      const windowRight = windowCenterX + p.window_width / 2;
+      const openingLeft = p.opening_center_x - p.opening_width / 2;
+      const openingRight = p.opening_center_x + p.opening_width / 2;
+      const windowBottom = p.window_bottom_offset;
+      const windowTop = windowBottom + windowTotalHeight;
+      return {
+        windowCenterX,
+        windowTotalHeight,
+        openingTotalHeight,
+        hingeXClosed,
+        hingeZ,
+        zNear,
+        zFar,
+        windowLeft,
+        windowRight,
+        openingLeft,
+        openingRight,
+        windowBottom,
+        windowTop
+      };
+    }
+
+    function frontSummaryHtml(kind, p, place) {
+      const openHeight = place.openingTotalHeight;
+      const winHeight = place.windowTotalHeight;
+      const leftGap = place.windowLeft - place.openingLeft;
+      const rightGap = place.openingRight - place.windowRight;
+      if (kind === "opening") {
+        return (
+          "<div class=\"t\">Opening</div>" +
+          "<div><span class=\"k\">Width:</span> " + fmtMm(p.opening_width) + " mm</div>" +
+          "<div><span class=\"k\">Height:</span> " + fmtMm(openHeight) + " mm</div>" +
+          "<div><span class=\"k\">Spring:</span> " + fmtMm(p.opening_spring_height) + " mm</div>" +
+          "<div><span class=\"k\">Arch rise:</span> " + fmtMm(p.opening_arch_rise) + " mm</div>" +
+          "<div><span class=\"k\">Depth:</span> " + fmtMm(p.opening_depth) + " mm</div>" +
+          "<div><span class=\"k\">Center X:</span> " + fmtMm(p.opening_center_x) + " mm</div>"
+        );
+      }
+      return (
+        "<div class=\"t\">Window</div>" +
+        "<div><span class=\"k\">Width:</span> " + fmtMm(p.window_width) + " mm</div>" +
+        "<div><span class=\"k\">Height:</span> " + fmtMm(winHeight) + " mm</div>" +
+        "<div><span class=\"k\">Spring:</span> " + fmtMm(p.window_spring_height) + " mm</div>" +
+        "<div><span class=\"k\">Arch rise:</span> " + fmtMm(p.window_arch_rise) + " mm</div>" +
+        "<div><span class=\"k\">Bottom offset:</span> " + fmtMm(p.window_bottom_offset) + " mm</div>" +
+        "<div><span class=\"k\">Left gap:</span> " + fmtMm(leftGap) + " mm</div>" +
+        "<div><span class=\"k\">Right gap:</span> " + fmtMm(rightGap) + " mm</div>" +
+        "<div><span class=\"k\">Hinge x-offset:</span> " + fmtMm(p.window_hinge_x_offset) + " mm</div>" +
+        "<div><span class=\"k\">Hinge z-offset:</span> " + fmtMm(p.window_hinge_z_offset) + " mm</div>"
+      );
+    }
+
+    function hideFrontSummary() {
+      const box = document.getElementById("front_hover_summary");
+      if (!box) {
+        return;
+      }
+      box.style.display = "none";
+    }
+
+    function showFrontSummary(kind, hoverEvent, p, place) {
+      const box = document.getElementById("front_hover_summary");
+      const card = document.getElementById("front_view").closest(".view-card");
+      if (!box || !card) {
+        return;
+      }
+
+      box.innerHTML = frontSummaryHtml(kind, p, place);
+      box.style.display = "block";
+
+      const rect = card.getBoundingClientRect();
+      const evt = hoverEvent || {};
+      let left = (evt.clientX || rect.left + 20) - rect.left + 12;
+      let top = (evt.clientY || rect.top + 20) - rect.top + 12;
+
+      const maxLeft = Math.max(6, card.clientWidth - box.offsetWidth - 8);
+      const maxTop = Math.max(6, card.clientHeight - box.offsetHeight - 8);
+      if (left > maxLeft) {
+        left = maxLeft;
+      }
+      if (top > maxTop) {
+        top = maxTop;
+      }
+      if (left < 6) {
+        left = 6;
+      }
+      if (top < 6) {
+        top = 6;
+      }
+
+      box.style.left = left + "px";
+      box.style.top = top + "px";
+    }
+
+    function buildArchOutlineXY(width, springHeight, archRise, centerX, yOffset, archType, superN, nyPlot) {
+      if (archType === "none") {
+        const left = centerX - width / 2;
+        const right = centerX + width / 2;
+        const y0 = yOffset;
+        const y1 = yOffset + springHeight + archRise;
+        return {
+          x: [left, right, right, left, left],
+          y: [y0, y0, y1, y1, y0]
+        };
+      }
+      const totalHeight = springHeight + archRise;
+      const ys = linspace(0, totalHeight, nyPlot);
+      const lefts = [];
+      const rights = [];
+      for (const y of ys) {
+        const b = archBoundary(y, width, springHeight, archRise, centerX, archType, superN);
+        lefts.push(b.left);
+        rights.push(b.right);
+      }
+      const x = lefts.concat(rights.slice().reverse(), [lefts[0]]);
+      const y = ys.concat(ys.slice().reverse(), [ys[0]]).map(v => v + yOffset);
+      return { x, y };
+    }
+
+    function closedPolygon(points) {
+      const x = points.map(p => p.x);
+      const y = points.map(p => p.y);
+      x.push(points[0].x);
+      y.push(points[0].y);
+      return { x, y };
+    }
+
+    function base2dLayout(title) {
+      return {
+        title: { text: title, font: { size: 13 } },
+        margin: { l: 58, r: 24, t: 48, b: 46 },
+        showlegend: false,
+        plot_bgcolor: "#ffffff",
+        paper_bgcolor: "#ffffff",
+        shapes: [],
+        annotations: []
+      };
+    }
+
+    function addDim(layout, x0, y0, x1, y1, text, textDx, textDy) {
+      layout.annotations.push({
+        x: x1,
+        y: y1,
+        xref: "x",
+        yref: "y",
+        ax: x0,
+        ay: y0,
+        axref: "x",
+        ayref: "y",
+        text: "",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end+start",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a"
+      });
+      layout.annotations.push({
+        x: (x0 + x1) / 2 + (textDx || 0),
+        y: (y0 + y1) / 2 + (textDy || 0),
+        xref: "x",
+        yref: "y",
+        text: text,
+        showarrow: false,
+        font: { size: 11, color: "#1f2937" },
+        bgcolor: "rgba(255,255,255,0.88)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2
+      });
+    }
+
+    function hingeTableText(p) {
+      return (
+        "<b>hinge axis</b><br>" +
+        "x-offset: " + fmtMm(p.window_hinge_x_offset) + " mm<br>" +
+        "z-offset: " + fmtMm(p.window_hinge_z_offset) + " mm"
+      );
+    }
+
+    function addHingeTable(layout, p, hingeX, hingeY, tableX, tableY) {
+      layout.annotations.push({
+        x: hingeX,
+        y: hingeY,
+        xref: "x",
+        yref: "y",
+        ax: tableX,
+        ay: tableY,
+        axref: "x",
+        ayref: "y",
+        text: hingeTableText(p),
+        align: "left",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a",
+        bgcolor: "rgba(255,255,255,0.92)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 4,
+        font: { size: 11, color: "#1f2937" }
+      });
+    }
+
+    async function renderFrontView(p, detailMode) {
+      const showPdfAnn = detailMode === "pdf";
+      const place = getPlacement(p);
+      const opening = buildArchOutlineXY(
+        p.opening_width,
+        p.opening_spring_height,
+        p.opening_arch_rise,
+        p.opening_center_x,
+        0,
+        p.opening_arch_type,
+        p.opening_super_n,
+        p.ny_plot
+      );
+      const windowClosed = buildArchOutlineXY(
+        p.window_width,
+        p.window_spring_height,
+        p.window_arch_rise,
+        place.windowCenterX,
+        p.window_bottom_offset,
+        p.window_arch_type,
+        p.window_super_n,
+        p.ny_plot
+      );
+
+      const traces = [
+        {
+          x: opening.x,
+          y: opening.y,
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#7a8da6", width: 2, dash: "dot" }
+        },
+        {
+          x: windowClosed.x,
+          y: windowClosed.y,
+          type: "scatter",
+          mode: "lines",
+          line: { color: COLORS.face1, width: 3 }
+        },
+        {
+          x: [place.hingeXClosed, place.hingeXClosed],
+          y: [place.windowBottom, place.windowTop],
+          type: "scatter",
+          mode: "lines+markers",
+          line: { color: COLORS.hinge, width: 3, dash: "dot" },
+          marker: { color: COLORS.hinge, size: 6 }
+        }
+      ];
+
+      const ySpan = Math.max(1, place.openingTotalHeight);
+      const xSpan = Math.max(1, p.opening_width);
+      const yWidth = place.windowBottom - 0.07 * ySpan;
+      const yCenter = place.windowBottom - 0.16 * ySpan;
+      const yOpeningWidth = place.openingTotalHeight + 0.06 * ySpan;
+      const xSpring = place.windowRight + 0.08 * xSpan;
+      const xArch = place.windowRight + 0.16 * xSpan;
+      const xTotal = place.windowRight + 0.24 * xSpan;
+      const xBottom = place.windowCenterX - 0.12 * p.window_width;
+      const xOpenSpring = place.openingLeft - 0.12 * xSpan;
+      const xOpenArch = place.openingLeft - 0.2 * xSpan;
+      const xOpenHeight = place.openingLeft - 0.28 * xSpan;
+      const yLeftGap = place.openingTotalHeight + 0.2 * ySpan;
+      const yRightGap = place.openingTotalHeight + 0.27 * ySpan;
+      const frontTableX = Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed) - 0.16 * xSpan;
+      const frontTableY = 0.05 * ySpan;
+
+      const layout = base2dLayout("Front view: closed sash dimensions");
+      addDim(
+        layout,
+        place.openingLeft,
+        yOpeningWidth,
+        place.openingRight,
+        yOpeningWidth,
+        "opening width " + fmtMm(p.opening_width) + " mm",
+        0,
+        0.03 * ySpan
+      );
+      addDim(
+        layout,
+        xOpenSpring,
+        0,
+        xOpenSpring,
+        p.opening_spring_height,
+        "opening spring " + fmtMm(p.opening_spring_height) + " mm",
+        -0.03 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        xOpenArch,
+        p.opening_spring_height,
+        xOpenArch,
+        place.openingTotalHeight,
+        "opening arch rise " + fmtMm(p.opening_arch_rise) + " mm",
+        -0.03 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        xOpenHeight,
+        0,
+        xOpenHeight,
+        place.openingTotalHeight,
+        "opening height " + fmtMm(place.openingTotalHeight) + " mm",
+        -0.03 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        place.windowLeft,
+        yWidth,
+        place.windowRight,
+        yWidth,
+        "width " + fmtMm(p.window_width) + " mm",
+        0,
+        -0.03 * ySpan
+      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          place.openingLeft,
+          yLeftGap,
+          place.windowLeft,
+          yLeftGap,
+          "left gap " + fmtMm(place.windowLeft - place.openingLeft) + " mm",
+          0,
+          0.03 * ySpan
+        );
+        addDim(
+          layout,
+          place.windowRight,
+          yRightGap,
+          place.openingRight,
+          yRightGap,
+          "right gap " + fmtMm(place.openingRight - place.windowRight) + " mm",
+          0,
+          0.03 * ySpan
+        );
+      }
+      addDim(
+        layout,
+        xSpring,
+        place.windowBottom,
+        xSpring,
+        place.windowBottom + p.window_spring_height,
+        "spring " + fmtMm(p.window_spring_height) + " mm",
+        0.02 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        xArch,
+        place.windowBottom + p.window_spring_height,
+        xArch,
+        place.windowTop,
+        "arch rise " + fmtMm(p.window_arch_rise) + " mm",
+        0.02 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        xTotal,
+        place.windowBottom,
+        xTotal,
+        place.windowTop,
+        "total " + fmtMm(place.windowTotalHeight) + " mm",
+        0.02 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        xBottom,
+        0,
+        xBottom,
+        place.windowBottom,
+        "bottom offset " + fmtMm(p.window_bottom_offset) + " mm",
+        -0.03 * xSpan,
+        0
+      );
+      addDim(
+        layout,
+        p.opening_center_x,
+        yCenter,
+        place.windowCenterX,
+        yCenter,
+        "center offset x " + fmtMm(p.window_center_offset_x) + " mm",
+        0,
+        -0.03 * ySpan
+      );
+      if (showPdfAnn) {
+        addHingeTable(layout, p, place.hingeXClosed, place.windowBottom, frontTableX, frontTableY);
+      }
+      layout.xaxis = {
+        title: "x (mm)",
+        range: [
+          (showPdfAnn
+            ? Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed, frontTableX)
+            : Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed)) - 0.2 * xSpan,
+          Math.max(place.openingRight, xTotal, place.hingeXClosed) + 0.2 * xSpan
+        ],
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+      const frontYMax = showPdfAnn
+        ? Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth, yRightGap, frontTableY)
+        : Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth);
+      layout.yaxis = {
+        title: "y (mm)",
+        range: [
+          Math.min(0, yCenter) - 0.08 * ySpan,
+          frontYMax + 0.12 * ySpan
+        ],
+        scaleanchor: "x",
+        scaleratio: 1,
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+
+      const frontDiv = document.getElementById("front_view");
+      const gd = await Plotly.newPlot("front_view", traces, layout, FRONT_VIEW_CONFIG);
+      hideFrontSummary();
+
+      if (frontDiv && typeof frontDiv.removeAllListeners === "function") {
+        frontDiv.removeAllListeners("plotly_hover");
+        frontDiv.removeAllListeners("plotly_unhover");
+      }
+
+      if (frontDiv && typeof frontDiv.on === "function") {
+        frontDiv.on("plotly_hover", (ev) => {
+          if (!ev || !ev.points || ev.points.length === 0) {
+            hideFrontSummary();
+            return;
+          }
+          const idx = ev.points[0].curveNumber;
+          if (idx === 0) {
+            showFrontSummary("opening", ev.event, p, place);
+          } else if (idx === 1) {
+            showFrontSummary("window", ev.event, p, place);
+          } else {
+            hideFrontSummary();
+          }
+        });
+        frontDiv.on("plotly_unhover", () => {
+          hideFrontSummary();
+        });
+      }
+
+      return gd;
+    }
+
+    async function renderSideView(p, detailMode) {
+      const showPdfAnn = detailMode === "pdf";
+      const place = getPlacement(p);
+      const traces = [
+        {
+          x: [0, p.opening_depth, p.opening_depth, 0, 0],
+          y: [0, 0, place.openingTotalHeight, place.openingTotalHeight, 0],
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#365d85", width: 2 }
+        },
+        {
+          x: [place.zNear, place.zFar, place.zFar, place.zNear, place.zNear],
+          y: [place.windowBottom, place.windowBottom, place.windowTop, place.windowTop, place.windowBottom],
+          type: "scatter",
+          mode: "lines",
+          line: { color: COLORS.face2, width: 3 }
+        },
+        {
+          x: [place.hingeZ, place.hingeZ],
+          y: [place.windowBottom, place.windowTop],
+          type: "scatter",
+          mode: "lines",
+          line: { color: COLORS.hinge, width: 3, dash: "dot" }
+        },
+        {
+          x: [place.hingeZ],
+          y: [place.windowBottom],
+          type: "scatter",
+          mode: "markers",
+          marker: { color: COLORS.hinge, size: 8, symbol: "circle" },
+          hoverinfo: "skip"
+        }
+      ];
+
+      const ySpan = Math.max(1, place.openingTotalHeight);
+      const xSpan = Math.max(1, p.opening_depth);
+      const yDepth = -0.08 * ySpan;
+      const yThick = place.windowTop + 0.08 * ySpan;
+      const zMin = Math.min(0, place.zNear, place.hingeZ);
+      const zMax = Math.max(p.opening_depth, place.zFar, place.hingeZ);
+      const zSpan = Math.max(1, zMax - zMin);
+      const sideTableX = zMin - 0.12 * zSpan;
+      const sideTableY = 0.05 * ySpan;
+
+      const layout = base2dLayout("Side section: depth dimensions");
+      addDim(
+        layout,
+        0,
+        yDepth,
+        p.opening_depth,
+        yDepth,
+        "opening depth " + fmtMm(p.opening_depth) + " mm",
+        0,
+        -0.03 * ySpan
+      );
+      addDim(
+        layout,
+        place.zNear,
+        yThick,
+        place.zFar,
+        yThick,
+        "thickness " + fmtMm(p.window_thickness) + " mm",
+        0,
+        0.03 * ySpan
+      );
+      layout.annotations.push({
+        x: 0,
+        y: 0.56 * place.openingTotalHeight,
+        xref: "x",
+        yref: "y",
+        ax: -0.12 * xSpan,
+        ay: 0.56 * place.openingTotalHeight,
+        axref: "x",
+        ayref: "y",
+        text: "inside",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a",
+        bgcolor: "rgba(255,255,255,0.88)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2,
+        font: { size: 11, color: "#1f2937" }
+      });
+      layout.annotations.push({
+        x: p.opening_depth,
+        y: 0.56 * place.openingTotalHeight,
+        xref: "x",
+        yref: "y",
+        ax: p.opening_depth + 0.12 * xSpan,
+        ay: 0.56 * place.openingTotalHeight,
+        axref: "x",
+        ayref: "y",
+        text: "outside",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a",
+        bgcolor: "rgba(255,255,255,0.88)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2,
+        font: { size: 11, color: "#1f2937" }
+      });
+      if (showPdfAnn) {
+        addHingeTable(layout, p, place.hingeZ, place.windowBottom, sideTableX, sideTableY);
+      }
+
+      layout.xaxis = {
+        title: "z depth (mm)",
+        range: [
+          (showPdfAnn
+            ? Math.min(0, place.zNear, place.hingeZ, sideTableX)
+            : Math.min(0, place.zNear, place.hingeZ)) - 0.18 * xSpan,
+          Math.max(p.opening_depth, place.zFar, place.hingeZ) + 0.18 * xSpan
+        ],
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+      layout.yaxis = {
+        title: "y (mm)",
+        range: [
+          Math.min(0, yDepth) - 0.08 * ySpan,
+          (showPdfAnn
+            ? Math.max(place.openingTotalHeight, yThick, sideTableY)
+            : Math.max(place.openingTotalHeight, yThick)) + 0.1 * ySpan
+        ],
+        scaleanchor: "x",
+        scaleratio: 1,
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+
+      return Plotly.newPlot("side_view", traces, layout, STATIC_VIEW_CONFIG);
+    }
+
+    async function renderTopView(p, angleDeg, detailMode) {
+      const showPdfAnn = detailMode === "pdf";
+      const place = getPlacement(p);
+      const theta = rad(angleDeg);
+      const thetaOpen = inwardTheta(theta, p.window_hinge_side);
+
+      const openingTop = closedPolygon([
+        { x: place.openingLeft, y: 0 },
+        { x: place.openingRight, y: 0 },
+        { x: place.openingRight, y: p.opening_depth },
+        { x: place.openingLeft, y: p.opening_depth }
+      ]);
+
+      const closedWindowPoly = [
+        { x: place.windowLeft, y: place.zNear },
+        { x: place.windowRight, y: place.zNear },
+        { x: place.windowRight, y: place.zFar },
+        { x: place.windowLeft, y: place.zFar }
+      ];
+      const openWindowPoly = closedWindowPoly.map(pt => {
+        const rot = rotateAboutHinge(pt.x, pt.y, place.hingeXClosed, place.hingeZ, thetaOpen);
+        return { x: rot.x, y: rot.z };
+      });
+
+      const closedTop = closedPolygon(closedWindowPoly);
+      const openTop = closedPolygon(openWindowPoly);
+
+      const side = p.window_hinge_side;
+      const latchClosedX = side === "left" ? place.windowRight : place.windowLeft;
+      const latchClosed = { x: latchClosedX, y: place.hingeZ };
+      const latchOpenRaw = rotateAboutHinge(
+        latchClosed.x,
+        latchClosed.y,
+        place.hingeXClosed,
+        place.hingeZ,
+        thetaOpen
+      );
+      const latchOpen = { x: latchOpenRaw.x, y: latchOpenRaw.z };
+
+      const a0 = Math.atan2(latchClosed.y - place.hingeZ, latchClosed.x - place.hingeXClosed);
+      const a1Raw = Math.atan2(latchOpen.y - place.hingeZ, latchOpen.x - place.hingeXClosed);
+      let delta = a1Raw - a0;
+      if (delta > Math.PI) {
+        delta -= 2 * Math.PI;
+      }
+      if (delta < -Math.PI) {
+        delta += 2 * Math.PI;
+      }
+      const arcR = Math.max(50, Math.min(p.window_width * 0.24, p.opening_width * 0.2));
+      const arcX = [];
+      const arcY = [];
+      const nArc = 70;
+      for (let i = 0; i < nArc; i += 1) {
+        const t = i / (nArc - 1);
+        const a = a0 + delta * t;
+        arcX.push(place.hingeXClosed + arcR * Math.cos(a));
+        arcY.push(place.hingeZ + arcR * Math.sin(a));
+      }
+
+      const traces = [
+        {
+          x: openingTop.x,
+          y: openingTop.y,
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#365d85", width: 2 }
+        },
+        {
+          x: closedTop.x,
+          y: closedTop.y,
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#8b98aa", width: 2, dash: "dot" }
+        },
+        {
+          x: openTop.x,
+          y: openTop.y,
+          type: "scatter",
+          mode: "lines",
+          line: { color: COLORS.face1, width: 3 }
+        },
+        {
+          x: [place.hingeXClosed, latchClosed.x],
+          y: [place.hingeZ, latchClosed.y],
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#7688a2", width: 2, dash: "dot" }
+        },
+        {
+          x: [place.hingeXClosed, latchOpen.x],
+          y: [place.hingeZ, latchOpen.y],
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#2f3a4a", width: 2 }
+        },
+        {
+          x: arcX,
+          y: arcY,
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#111111", width: 2 }
+        },
+        {
+          x: [place.hingeXClosed],
+          y: [place.hingeZ],
+          type: "scatter",
+          mode: "markers",
+          marker: { color: "#111111", size: 13, symbol: "circle", line: { color: "#ffffff", width: 2 } },
+          hoverinfo: "skip"
+        }
+      ];
+
+      const layout = base2dLayout("Top view: sash opened to " + angleDeg.toFixed(2) + " deg");
+      const aMid = a0 + 0.58 * delta;
+      layout.annotations.push({
+        x: place.hingeXClosed + (arcR + 60) * Math.cos(aMid),
+        y: place.hingeZ + (arcR + 60) * Math.sin(aMid),
+        xref: "x",
+        yref: "y",
+        text: angleDeg.toFixed(2) + " deg",
+        showarrow: false,
+        font: { size: 12, color: "#111111" },
+        bgcolor: "rgba(255,255,255,0.9)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2
+      });
+      const xMidOpening = (place.openingLeft + place.openingRight) / 2;
+      layout.annotations.push({
+        x: xMidOpening,
+        y: 0,
+        xref: "x",
+        yref: "y",
+        ax: xMidOpening,
+        ay: -0.12 * Math.max(1, p.opening_depth),
+        axref: "x",
+        ayref: "y",
+        text: "inside",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a",
+        bgcolor: "rgba(255,255,255,0.88)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2,
+        font: { size: 11, color: "#1f2937" }
+      });
+      layout.annotations.push({
+        x: xMidOpening,
+        y: p.opening_depth,
+        xref: "x",
+        yref: "y",
+        ax: xMidOpening,
+        ay: p.opening_depth + 0.12 * Math.max(1, p.opening_depth),
+        axref: "x",
+        ayref: "y",
+        text: "outside",
+        showarrow: true,
+        arrowhead: 2,
+        arrowside: "end",
+        arrowwidth: 1.4,
+        arrowcolor: "#2f3a4a",
+        bgcolor: "rgba(255,255,255,0.88)",
+        bordercolor: "#d8deea",
+        borderwidth: 1,
+        borderpad: 2,
+        font: { size: 11, color: "#1f2937" }
+      });
+      const topGeomX = openingTop.x
+        .concat(openTop.x)
+        .concat(closedTop.x)
+        .concat([place.hingeXClosed, latchClosed.x, latchOpen.x]);
+      const topGeomZ = openingTop.y
+        .concat(openTop.y)
+        .concat(closedTop.y)
+        .concat([place.hingeZ, latchClosed.y, latchOpen.y]);
+      const topXMin = Math.min(...topGeomX);
+      const topXMax = Math.max(...topGeomX);
+      const topZMin = Math.min(...topGeomZ);
+      const topZMax = Math.max(...topGeomZ);
+      const topXSpan = Math.max(1, topXMax - topXMin);
+      const topZSpan = Math.max(1, topZMax - topZMin);
+      const topTableX = topXMin - 0.18 * topXSpan;
+      const topTableY = p.opening_depth;
+      if (showPdfAnn) {
+        addHingeTable(layout, p, place.hingeXClosed, place.hingeZ, topTableX, topTableY);
+      }
+
+      const extraTopX = showPdfAnn ? [topTableX] : [];
+      const extraTopY = showPdfAnn ? [topTableY] : [];
+      const xAll = openingTop.x
+        .concat(openTop.x)
+        .concat(closedTop.x)
+        .concat([place.hingeXClosed, latchClosed.x, latchOpen.x])
+        .concat(extraTopX);
+      const yAll = openingTop.y
+        .concat(openTop.y)
+        .concat(closedTop.y)
+        .concat([place.hingeZ, latchClosed.y, latchOpen.y])
+        .concat(extraTopY);
+      const xSpan = Math.max(1, Math.max(...xAll) - Math.min(...xAll));
+      const ySpan = Math.max(1, Math.max(...yAll) - Math.min(...yAll));
+
+      layout.xaxis = {
+        title: "x (mm)",
+        range: [
+          Math.min(...xAll) - 0.18 * xSpan,
+          Math.max(...xAll) + 0.18 * xSpan
+        ],
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+      layout.yaxis = {
+        title: "z depth (mm)",
+        range: [
+          Math.min(...yAll) - 0.2 * ySpan,
+          Math.max(...yAll) + 0.2 * ySpan
+        ],
+        scaleanchor: "x",
+        scaleratio: 1,
+        zeroline: false,
+        showgrid: true,
+        gridcolor: "#eff3f9"
+      };
+
+      return Plotly.newPlot("top_view", traces, layout, STATIC_VIEW_CONFIG);
+    }
+
+    async function renderStaticViews(p, angleDeg, detailMode) {
+      await Promise.all([
+        renderFrontView(p, detailMode),
+        renderSideView(p, detailMode),
+        renderTopView(p, angleDeg, detailMode)
+      ]);
+    }
+
+    async function exportViewsPdf() {
+      let restored = false;
+      try {
+        if (!LAST_RENDER) {
+          throw new Error("Render a scenario first, then export PDF.");
+        }
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+          throw new Error("jsPDF failed to load in this browser.");
+        }
+
+        hideFrontSummary();
+        setStatus("Building PDF from static views...", false);
+        await renderStaticViews(LAST_RENDER.params, LAST_RENDER.angleDeg, "pdf");
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: "landscape",
+          unit: "pt",
+          format: "a4",
+          compress: true
+        });
+
+        const pages = [
+          { id: "front_view", title: "Front View (Closed Window)" },
+          { id: "side_view", title: "Side Section (Depth)" },
+          { id: "top_view", title: "Top View (Open To Angle)" }
+        ];
+
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 28;
+        const titleY = margin;
+        const imageW = 1600;
+        const imageH = 1000;
+
+        for (let i = 0; i < pages.length; i += 1) {
+          const page = pages[i];
+          const div = document.getElementById(page.id);
+          if (!div) {
+            throw new Error("Missing view element: " + page.id);
+          }
+
+          const pngData = await Plotly.toImage(div, {
+            format: "png",
+            width: imageW,
+            height: imageH,
+            scale: 2
+          });
+
+          if (i > 0) {
+            pdf.addPage("a4", "landscape");
+          }
+
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(15);
+          pdf.text(page.title, margin, titleY);
+
+          const maxW = pageW - 2 * margin;
+          const maxH = pageH - 2 * margin - 18;
+          const ratio = Math.min(maxW / imageW, maxH / imageH);
+          const drawW = imageW * ratio;
+          const drawH = imageH * ratio;
+          const drawX = (pageW - drawW) / 2;
+          const drawY = margin + 18 + (maxH - drawH) / 2;
+
+          pdf.addImage(pngData, "PNG", drawX, drawY, drawW, drawH, undefined, "FAST");
+        }
+
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        pdf.save("arched-collision-views-" + stamp + ".pdf");
+        setStatus("PDF exported with front, side, and top views.", false);
+      } catch (err) {
+        setStatus(err && err.message ? err.message : String(err), true);
+      } finally {
+        if (LAST_RENDER) {
+          try {
+            await renderStaticViews(LAST_RENDER.params, LAST_RENDER.angleDeg, "web");
+            hideFrontSummary();
+            restored = true;
+          } catch (restoreErr) {
+            if (!restored) {
+              setStatus("PDF export finished, but failed to restore web view annotations.", true);
+            }
+          }
+        }
+      }
+    }
+
+    function setStatus(msg, isError) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = isError ? "error" : "";
+    }
+
+    function readNum(id) {
+      const val = Number(document.getElementById(id).value);
+      if (!Number.isFinite(val)) {
+        throw new Error("Invalid numeric value for " + id);
+      }
+      return val;
+    }
+
+    function readInt(id) {
+      return Math.max(2, Math.round(readNum(id)));
+    }
+
+    function readIntAtLeast(id, minVal) {
+      return Math.max(minVal, Math.round(readNum(id)));
+    }
+
+    function markDirty() {
+      APP_STATE.dirty = true;
+    }
+
+    function readParams() {
+      const p = {
+        opening_width: readNum("opening_width"),
+        opening_spring_height: readNum("opening_spring_height"),
+        opening_arch_rise: readNum("opening_arch_rise"),
+        opening_depth: readNum("opening_depth"),
+        opening_center_x: readNum("opening_center_x"),
+        opening_arch_type: document.getElementById("opening_arch_type").value,
+        opening_super_n: readNum("opening_super_n"),
+        window_width: readNum("window_width"),
+        window_spring_height: readNum("window_spring_height"),
+        window_arch_rise: readNum("window_arch_rise"),
+        window_thickness: readNum("window_thickness"),
+        window_bottom_offset: readNum("window_bottom_offset"),
+        window_center_offset_x: readNum("window_center_offset_x"),
+        window_hinge_depth: readNum("window_hinge_depth"),
+        window_hinge_x_offset: readNum("window_hinge_x_offset"),
+        window_hinge_z_offset: readNum("window_hinge_z_offset"),
+        window_hinge_side: document.getElementById("window_hinge_side").value,
+        window_arch_type: document.getElementById("window_arch_type").value,
+        window_super_n: readNum("window_super_n"),
+        auto_angle: document.getElementById("auto_angle").checked,
+        auto_render: document.getElementById("auto_render").checked,
+        manual_angle_deg: readNum("manual_angle_deg"),
+        theta_upper_deg: readNum("theta_upper_deg"),
+        tol_deg: readNum("tol_deg"),
+        ny_solve: readInt("ny_solve"),
+        ny_plot: readInt("ny_plot"),
+        auto_render_sec: readIntAtLeast("auto_render_sec", 1),
+        surface_transparency: readNum("surface_transparency")
+      };
+      if (p.opening_arch_type === "none") {
+        p.opening_arch_rise = 0;
+      }
+      if (p.window_arch_type === "none") {
+        p.window_arch_rise = 0;
+      }
+      return p;
+    }
+
+    function validateParams(p) {
+      const positiveKeys = [
+        "opening_width",
+        "opening_depth",
+        "opening_spring_height",
+        "window_width",
+        "window_spring_height",
+        "window_thickness",
+        "theta_upper_deg",
+        "tol_deg",
+        "ny_solve",
+        "ny_plot"
+      ];
+      for (const key of positiveKeys) {
+        if (p[key] <= 0) {
+          throw new Error(key + " must be > 0");
+        }
+      }
+      if (p.window_hinge_side !== "left" && p.window_hinge_side !== "right") {
+        throw new Error("window_hinge_side must be left or right");
+      }
+      if (p.opening_arch_type !== "none" && p.opening_arch_rise <= 0) {
+        throw new Error("opening_arch_rise must be > 0 unless opening_arch_type is none");
+      }
+      if (p.window_arch_type !== "none" && p.window_arch_rise <= 0) {
+        throw new Error("window_arch_rise must be > 0 unless window_arch_type is none");
+      }
+      if (p.opening_arch_type === "superellipse" && p.opening_super_n <= 0) {
+        throw new Error("opening_super_n must be > 0 when opening_arch_type is superellipse");
+      }
+      if (p.window_arch_type === "superellipse" && p.window_super_n <= 0) {
+        throw new Error("window_super_n must be > 0 when window_arch_type is superellipse");
+      }
+      if (p.auto_angle === false && !Number.isFinite(p.manual_angle_deg)) {
+        throw new Error("manual_angle_deg is invalid");
+      }
+      if (p.auto_render_sec <= 0) {
+        throw new Error("auto_render_sec must be > 0");
+      }
+      if (p.surface_transparency < 0 || p.surface_transparency > 100) {
+        throw new Error("surface_transparency must be between 0 and 100");
+      }
+    }
+
+    function setDefaults() {
+      for (const [k, v] of Object.entries(DEFAULTS)) {
+        const el = document.getElementById(k);
+        if (!el) {
+          continue;
+        }
+        if (el.type === "checkbox") {
+          el.checked = Boolean(v);
+        } else {
+          el.value = String(v);
+        }
+      }
+      syncManualAngleState();
+      syncSuperNInputs();
+      syncArchRiseInputs();
+      syncTransparencyLabel();
+    }
+
+    function syncManualAngleState() {
+      const auto = document.getElementById("auto_angle").checked;
+      document.getElementById("manual_angle_deg").disabled = auto;
+    }
+
+    function syncSuperNInputs() {
+      const openingIsSuperellipse = document.getElementById("opening_arch_type").value === "superellipse";
+      const windowIsSuperellipse = document.getElementById("window_arch_type").value === "superellipse";
+
+      const openingRow = document.getElementById("opening_super_n_row");
+      const openingInput = document.getElementById("opening_super_n");
+      openingRow.style.display = openingIsSuperellipse ? "" : "none";
+      openingInput.disabled = !openingIsSuperellipse;
+
+      const windowRow = document.getElementById("window_super_n_row");
+      const windowInput = document.getElementById("window_super_n");
+      windowRow.style.display = windowIsSuperellipse ? "" : "none";
+      windowInput.disabled = !windowIsSuperellipse;
+    }
+
+    function syncArchRiseInputs() {
+      const openingArchType = document.getElementById("opening_arch_type").value;
+      const windowArchType = document.getElementById("window_arch_type").value;
+      const openingRiseInput = document.getElementById("opening_arch_rise");
+      const windowRiseInput = document.getElementById("window_arch_rise");
+
+      if (openingArchType === "none") {
+        openingRiseInput.value = "0";
+        openingRiseInput.disabled = true;
+      } else {
+        if (openingRiseInput.disabled) {
+          openingRiseInput.value = String(DEFAULTS.opening_arch_rise);
+        }
+        openingRiseInput.disabled = false;
+      }
+
+      if (windowArchType === "none") {
+        windowRiseInput.value = "0";
+        windowRiseInput.disabled = true;
+      } else {
+        if (windowRiseInput.disabled) {
+          windowRiseInput.value = String(DEFAULTS.window_arch_rise);
+        }
+        windowRiseInput.disabled = false;
+      }
+    }
+
+    function syncTransparencyLabel() {
+      const val = Number(document.getElementById("surface_transparency").value);
+      document.getElementById("surface_transparency_label").textContent = Math.round(val) + "%";
+    }
+
+    async function render2dFallback(geo, angleDeg, note, reason) {
+      document.getElementById("plot3d").style.display = "none";
+      document.getElementById("plot2d").style.display = "block";
+
+      const traces = [
+        trace2dXY(geo.openingZ0, "Opening z=0", COLORS.opening0),
+        trace2dXY(geo.openingZT, "Opening z=depth", COLORS.openingT),
+        trace2dXY(geo.windowFace1Rot, "Window face 1", COLORS.face1),
+        trace2dXY(geo.windowFace2Rot, "Window face 2", COLORS.face2),
+        trace2dXY(geo.hingeLine, "Hinge axis", COLORS.hinge),
+        trace2dXZ(geo.openingZ0, "Opening z=0", COLORS.opening0),
+        trace2dXZ(geo.openingZT, "Opening z=depth", COLORS.openingT),
+        trace2dXZ(geo.windowFace1Rot, "Window face 1", COLORS.face1),
+        trace2dXZ(geo.windowFace2Rot, "Window face 2", COLORS.face2),
+        trace2dXZ(geo.hingeLine, "Hinge axis", COLORS.hinge)
+      ];
+
+      const layout = {
+        title: {
+          text: "2D fallback: angle = " + angleDeg.toFixed(2) + " deg (" + note + ")"
+        },
+        xaxis: { domain: [0.0, 0.47], title: "x (mm)" },
+        yaxis: { domain: [0.0, 1.0], title: "y (mm)", scaleanchor: "x" },
+        xaxis2: { domain: [0.53, 1.0], title: "x (mm)" },
+        yaxis2: { domain: [0.0, 1.0], title: "z (mm)", scaleanchor: "x2" },
+        legend: { orientation: "h", y: -0.1 },
+        margin: { l: 60, r: 20, t: 58, b: 70 }
+      };
+
+      await Plotly.newPlot("plot2d", traces, layout, { responsive: true, displaylogo: false });
+      setStatus("3D unavailable (" + reason + "). Showing 2D fallback.", false);
+    }
+
+    async function render() {
+      if (APP_STATE.renderInFlight) {
+        return;
+      }
+      APP_STATE.renderInFlight = true;
+      try {
+        const p = readParams();
+        validateParams(p);
+
+        const solved = p.auto_angle ? computeMaxOpenAngle(p) : {
+          max_angle_deg: p.manual_angle_deg,
+          note: "Manual angle"
+        };
+
+        const angleDeg = Math.abs(solved.max_angle_deg);
+        const geo = buildGeometry(p, angleDeg);
+        await renderStaticViews(p, angleDeg, "web");
+
+        const transparency = Math.min(100, Math.max(0, p.surface_transparency));
+        const baseOpacity = 1 - transparency / 100;
+        const openingOpacity = Math.max(0, Math.min(1, baseOpacity * 0.7));
+        const windowOpacity = Math.max(0, Math.min(1, baseOpacity));
+
+        const traces3d = [];
+
+        const openingSurface0 = mesh3dFromOutline(
+          geo.openingZ0,
+          "Opening surface z=0",
+          COLORS.openingSurface,
+          openingOpacity
+        );
+        const openingSurfaceT = mesh3dFromOutline(
+          geo.openingZT,
+          "Opening surface z=depth",
+          COLORS.openingSurface,
+          openingOpacity
+        );
+        const windowSurface1 = mesh3dFromOutline(
+          geo.windowFace1Rot,
+          "Window surface 1",
+          COLORS.windowSurface,
+          windowOpacity
+        );
+        const windowSurface2 = mesh3dFromOutline(
+          geo.windowFace2Rot,
+          "Window surface 2",
+          COLORS.windowSurface,
+          windowOpacity
+        );
+
+        if (openingSurface0) traces3d.push(openingSurface0);
+        if (openingSurfaceT) traces3d.push(openingSurfaceT);
+        if (windowSurface1) traces3d.push(windowSurface1);
+        if (windowSurface2) traces3d.push(windowSurface2);
+
+        traces3d.push(
+          trace3d(geo.openingZ0, "Opening (z=0)", COLORS.opening0),
+          trace3d(geo.openingZT, "Opening (z=depth)", COLORS.openingT),
+          trace3d(geo.windowFace1Rot, "Window face (1)", COLORS.face1),
+          trace3d(geo.windowFace2Rot, "Window face (2)", COLORS.face2),
+          trace3d(geo.hingeLine, "Hinge axis", COLORS.hinge)
+        );
+
+        const layout3d = {
+          title: { text: "Max opening angle = " + angleDeg.toFixed(2) + " deg (" + solved.note + ")" },
+          scene: {
+            xaxis: { title: "x (mm)", autorange: "reversed" },
+            yaxis: { title: "y (mm)" },
+            zaxis: { title: "z (mm)" },
+            aspectmode: "data",
+            camera: {
+              up: { x: 0, y: 1, z: 0 },
+              center: { x: 0, y: 0, z: 0 },
+              eye: { x: 0, y: 0, z: -2.2 }
+            }
+          },
+          margin: { l: 0, r: 0, t: 50, b: 0 }
+        };
+
+        document.getElementById("plot2d").style.display = "none";
+        document.getElementById("plot3d").style.display = "block";
+
+        try {
+          await Plotly.newPlot("plot3d", traces3d, layout3d, { responsive: true, displaylogo: false });
+          setStatus("Rendered 3D. " + solved.note + ".", false);
+        } catch (err) {
+          await render2dFallback(geo, angleDeg, solved.note, err && err.message ? err.message : "WebGL blocked");
+        }
+
+        LAST_RENDER = {
+          params: p,
+          solved: solved,
+          angleDeg: angleDeg,
+          renderedAt: Date.now()
+        };
+        APP_STATE.dirty = false;
+        APP_STATE.lastRenderAt = Date.now();
+      } catch (err) {
+        LAST_RENDER = null;
+        APP_STATE.dirty = false;
+        APP_STATE.lastRenderAt = Date.now();
+        setStatus(err && err.message ? err.message : String(err), true);
+      } finally {
+        APP_STATE.renderInFlight = false;
+      }
+    }
+
+    document.getElementById("auto_angle").addEventListener("change", () => {
+      syncManualAngleState();
+      markDirty();
+    });
+    document.getElementById("window_hinge_side").addEventListener("change", () => {
+      const xOffsetEl = document.getElementById("window_hinge_x_offset");
+      const xOffset = Number(xOffsetEl.value);
+      if (Number.isFinite(xOffset)) {
+        xOffsetEl.value = String(-xOffset);
+      }
+      markDirty();
+    });
+    document.getElementById("opening_arch_type").addEventListener("change", syncSuperNInputs);
+    document.getElementById("window_arch_type").addEventListener("change", syncSuperNInputs);
+    document.getElementById("opening_arch_type").addEventListener("change", syncArchRiseInputs);
+    document.getElementById("window_arch_type").addEventListener("change", syncArchRiseInputs);
+    document.getElementById("surface_transparency").addEventListener("input", () => {
+      syncTransparencyLabel();
+      markDirty();
+    });
+    document.getElementById("render_btn").addEventListener("click", render);
+    document.getElementById("export_pdf_btn").addEventListener("click", exportViewsPdf);
+    document.getElementById("reset_btn").addEventListener("click", () => {
+      setDefaults();
+      render();
+    });
+
+    for (const el of document.querySelectorAll("input, select")) {
+      if (el.id === "auto_angle" || el.id === "surface_transparency") {
+        continue;
+      }
+      el.addEventListener("input", markDirty);
+      el.addEventListener("change", markDirty);
+    }
+
+    setInterval(() => {
+      if (!document.getElementById("auto_render").checked) {
+        return;
+      }
+      if (!APP_STATE.dirty || APP_STATE.renderInFlight) {
+        return;
+      }
+      const intervalSecRaw = Number(document.getElementById("auto_render_sec").value);
+      const intervalSec = Number.isFinite(intervalSecRaw) && intervalSecRaw > 0 ? intervalSecRaw : 3;
+      if ((Date.now() - APP_STATE.lastRenderAt) < intervalSec * 1000) {
+        return;
+      }
+      render();
+    }, 500);
+
+    setDefaults();
+    render();
+  </script>
+</body>
+</html>
