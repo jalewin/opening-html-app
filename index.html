@@ -386,7 +386,7 @@
           </div>
           <div class="grid-2">
             <label>Manual angle deg
-              <input id="manual_angle_deg" type="number" step="any" value="45" disabled>
+              <input id="manual_angle_deg" type="number" step="any" min="0" value="45" disabled>
             </label>
             <label>Theta upper deg
               <input id="theta_upper_deg" type="number" step="any" value="120">
@@ -406,6 +406,22 @@
           </div>
           <label>Surface transparency <span id="surface_transparency_label">65%</span>
             <input id="surface_transparency" type="range" min="0" max="95" step="1" value="65">
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Saved Settings</legend>
+          <label>Setting name
+            <input id="saved_setting_name" type="text" placeholder="window_1">
+          </label>
+          <div class="btn-row">
+            <button id="save_setting_btn" class="btn-ghost" type="button">Save Current</button>
+            <button id="delete_setting_btn" class="btn-ghost" type="button">Delete Selected</button>
+          </div>
+          <label>Saved presets
+            <select id="saved_settings_select">
+              <option value="">Select saved setting...</option>
+            </select>
           </label>
         </fieldset>
 
@@ -499,6 +515,7 @@
       displayModeBar: false,
       staticPlot: false
     };
+    const SAVED_SETTINGS_STORAGE_KEY = "arched-collision-saved-settings-v1";
 
     let LAST_RENDER = null;
     const APP_STATE = {
@@ -657,6 +674,7 @@
     }
 
     function computeMaxOpenAngle(p) {
+      // Model assumption: collision status is monotonic with inward opening angle.
       let thetaLow = 0;
       let thetaHigh = rad(p.theta_upper_deg);
       const tol = rad(p.tol_deg);
@@ -1875,6 +1893,43 @@
       APP_STATE.dirty = true;
     }
 
+    function getSavedSettingsMap() {
+      try {
+        const raw = localStorage.getItem(SAVED_SETTINGS_STORAGE_KEY);
+        if (!raw) {
+          return {};
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return {};
+        }
+        return parsed;
+      } catch (err) {
+        return {};
+      }
+    }
+
+    function writeSavedSettingsMap(mapObj) {
+      localStorage.setItem(SAVED_SETTINGS_STORAGE_KEY, JSON.stringify(mapObj));
+    }
+
+    function refreshSavedSettingsDropdown(selectedName) {
+      const selectEl = document.getElementById("saved_settings_select");
+      const settingsMap = getSavedSettingsMap();
+      const names = Object.keys(settingsMap).sort((a, b) => a.localeCompare(b));
+      selectEl.innerHTML = "<option value=\"\">Select saved setting...</option>";
+      for (const name of names) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        selectEl.appendChild(opt);
+      }
+      if (selectedName && settingsMap[selectedName]) {
+        selectEl.value = selectedName;
+      }
+      document.getElementById("delete_setting_btn").disabled = !selectEl.value;
+    }
+
     function readParams() {
       const p = {
         opening_width: readNum("opening_width"),
@@ -1915,6 +1970,104 @@
       return p;
     }
 
+    function applyParamsToInputs(params) {
+      const openingArchRiseLoaded = params.opening_arch_rise;
+      const windowArchRiseLoaded = params.window_arch_rise;
+      for (const key of Object.keys(DEFAULTS)) {
+        const el = document.getElementById(key);
+        if (!el) {
+          continue;
+        }
+        if (!(key in params)) {
+          continue;
+        }
+        if (el.type === "checkbox") {
+          el.checked = Boolean(params[key]);
+        } else {
+          el.value = String(params[key]);
+        }
+      }
+      syncManualAngleState();
+      syncSuperNInputs();
+      syncArchRiseInputs();
+      if (params.opening_arch_type && params.opening_arch_type !== "none" && Number.isFinite(openingArchRiseLoaded)) {
+        document.getElementById("opening_arch_rise").value = String(openingArchRiseLoaded);
+      }
+      if (params.window_arch_type && params.window_arch_type !== "none" && Number.isFinite(windowArchRiseLoaded)) {
+        document.getElementById("window_arch_rise").value = String(windowArchRiseLoaded);
+      }
+      syncTransparencyLabel();
+      markDirty();
+    }
+
+    function normalizeSettingName(rawName) {
+      return String(rawName || "").trim();
+    }
+
+    function saveCurrentSetting() {
+      try {
+        const nameInput = document.getElementById("saved_setting_name");
+        const settingName = normalizeSettingName(nameInput.value);
+        if (!settingName) {
+          throw new Error("Enter a setting name, for example: window_1");
+        }
+        const params = readParams();
+        validateParams(params);
+        const settingsMap = getSavedSettingsMap();
+        settingsMap[settingName] = params;
+        writeSavedSettingsMap(settingsMap);
+        refreshSavedSettingsDropdown(settingName);
+        setStatus("Saved setting \"" + settingName + "\".", false);
+      } catch (err) {
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
+    }
+
+    async function loadSelectedSetting() {
+      try {
+        const selectEl = document.getElementById("saved_settings_select");
+        const settingName = normalizeSettingName(selectEl.value);
+        if (!settingName) {
+          document.getElementById("delete_setting_btn").disabled = true;
+          return;
+        }
+        const settingsMap = getSavedSettingsMap();
+        if (!settingsMap[settingName]) {
+          throw new Error("Saved setting not found: " + settingName);
+        }
+        applyParamsToInputs(settingsMap[settingName]);
+        document.getElementById("saved_setting_name").value = settingName;
+        document.getElementById("delete_setting_btn").disabled = false;
+        setStatus("Loaded setting \"" + settingName + "\".", false);
+        await render();
+      } catch (err) {
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
+    }
+
+    function deleteSelectedSetting() {
+      try {
+        const selectEl = document.getElementById("saved_settings_select");
+        const settingName = normalizeSettingName(selectEl.value);
+        if (!settingName) {
+          throw new Error("Select a saved setting to delete.");
+        }
+        const settingsMap = getSavedSettingsMap();
+        if (!settingsMap[settingName]) {
+          throw new Error("Saved setting not found: " + settingName);
+        }
+        delete settingsMap[settingName];
+        writeSavedSettingsMap(settingsMap);
+        refreshSavedSettingsDropdown("");
+        if (document.getElementById("saved_setting_name").value === settingName) {
+          document.getElementById("saved_setting_name").value = "";
+        }
+        setStatus("Deleted setting \"" + settingName + "\".", false);
+      } catch (err) {
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
+    }
+
     function validateParams(p) {
       const positiveKeys = [
         "opening_width",
@@ -1950,6 +2103,9 @@
       }
       if (p.auto_angle === false && !Number.isFinite(p.manual_angle_deg)) {
         throw new Error("manual_angle_deg is invalid");
+      }
+      if (p.auto_angle === false && p.manual_angle_deg < 0) {
+        throw new Error("manual_angle_deg must be >= 0");
       }
       if (p.auto_render_sec <= 0) {
         throw new Error("auto_render_sec must be > 0");
@@ -2160,7 +2316,6 @@
         APP_STATE.dirty = false;
         APP_STATE.lastRenderAt = Date.now();
       } catch (err) {
-        LAST_RENDER = null;
         APP_STATE.dirty = false;
         APP_STATE.lastRenderAt = Date.now();
         setStatus(err && err.message ? err.message : String(err), true);
@@ -2189,6 +2344,9 @@
       syncTransparencyLabel();
       markDirty();
     });
+    document.getElementById("save_setting_btn").addEventListener("click", saveCurrentSetting);
+    document.getElementById("saved_settings_select").addEventListener("change", loadSelectedSetting);
+    document.getElementById("delete_setting_btn").addEventListener("click", deleteSelectedSetting);
     document.getElementById("render_btn").addEventListener("click", render);
     document.getElementById("export_pdf_btn").addEventListener("click", exportViewsPdf);
     document.getElementById("reset_btn").addEventListener("click", () => {
@@ -2197,7 +2355,12 @@
     });
 
     for (const el of document.querySelectorAll("input, select")) {
-      if (el.id === "auto_angle" || el.id === "surface_transparency") {
+      if (
+        el.id === "auto_angle" ||
+        el.id === "surface_transparency" ||
+        el.id === "saved_setting_name" ||
+        el.id === "saved_settings_select"
+      ) {
         continue;
       }
       el.addEventListener("input", markDirty);
@@ -2220,6 +2383,7 @@
     }, 500);
 
     setDefaults();
+    refreshSavedSettingsDropdown("");
     render();
   </script>
 </body>
