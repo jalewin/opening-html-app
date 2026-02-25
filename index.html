@@ -2185,6 +2185,10 @@
       document.getElementById("surface_transparency_label").textContent = Math.round(val) + "%";
     }
 
+    function isMobileViewport() {
+      return window.matchMedia("(max-width: 900px)").matches;
+    }
+
     async function render2dFallback(geo, angleDeg, note, reason) {
       document.getElementById("plot3d").style.display = "none";
       document.getElementById("plot2d").style.display = "block";
@@ -2281,21 +2285,42 @@
           trace3d(geo.hingeLine, "Hinge axis", COLORS.hinge)
         );
 
+        const mobile3d = isMobileViewport();
         const layout3d = {
           title: { text: "Max opening angle = " + angleDeg.toFixed(2) + " deg (" + solved.note + ")" },
+          uirevision: "plot3d-stable",
           scene: {
             xaxis: { title: "x (mm)", autorange: "reversed" },
             yaxis: { title: "y (mm)" },
             zaxis: { title: "z (mm)" },
             aspectmode: "data",
+            uirevision: "scene-stable",
             camera: {
               up: { x: 0, y: 1, z: 0 },
               center: { x: 0, y: 0, z: 0 },
-              eye: { x: 0, y: 0, z: -2.2 }
+              eye: { x: 0, y: 0, z: -2.8 }
             }
           },
+          legend: mobile3d
+            ? {
+                orientation: "h",
+                x: 0,
+                y: -0.18,
+                xanchor: "left",
+                yanchor: "top"
+              }
+            : {
+                orientation: "v",
+                x: 1.02,
+                y: 1,
+                xanchor: "left",
+                yanchor: "top"
+              },
           margin: { l: 0, r: 0, t: 50, b: 0 }
         };
+        if (mobile3d) {
+          layout3d.margin.b = 84;
+        }
 
         document.getElementById("plot2d").style.display = "none";
         document.getElementById("plot3d").style.display = "block";
