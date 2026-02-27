@@ -1292,26 +1292,28 @@
         0,
         0.03 * ySpan
       );
-      addDim(
-        layout,
-        xOpenSpring,
-        0,
-        xOpenSpring,
-        p.opening_spring_height,
-        "opening spring " + fmtMm(p.opening_spring_height) + " mm",
-        -0.03 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xOpenArch,
-        p.opening_spring_height,
-        xOpenArch,
-        place.openingTotalHeight,
-        "opening arch rise " + fmtMm(p.opening_arch_rise) + " mm",
-        -0.03 * xSpan,
-        0
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          xOpenSpring,
+          0,
+          xOpenSpring,
+          p.opening_spring_height,
+          "opening spring " + fmtMm(p.opening_spring_height) + " mm",
+          -0.03 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xOpenArch,
+          p.opening_spring_height,
+          xOpenArch,
+          place.openingTotalHeight,
+          "opening arch rise " + fmtMm(p.opening_arch_rise) + " mm",
+          -0.03 * xSpan,
+          0
+        );
+      }
       addDim(
         layout,
         xOpenHeight,
@@ -1354,36 +1356,38 @@
           0.03 * ySpan
         );
       }
-      addDim(
-        layout,
-        xSpring,
-        place.windowBottom,
-        xSpring,
-        place.windowBottom + p.window_spring_height,
-        "spring " + fmtMm(p.window_spring_height) + " mm",
-        0.02 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xArch,
-        place.windowBottom + p.window_spring_height,
-        xArch,
-        place.windowTop,
-        "arch rise " + fmtMm(p.window_arch_rise) + " mm",
-        0.02 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xTotal,
-        place.windowBottom,
-        xTotal,
-        place.windowTop,
-        "total " + fmtMm(place.windowTotalHeight) + " mm",
-        0.02 * xSpan,
-        0
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          xSpring,
+          place.windowBottom,
+          xSpring,
+          place.windowBottom + p.window_spring_height,
+          "spring " + fmtMm(p.window_spring_height) + " mm",
+          0.02 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xArch,
+          place.windowBottom + p.window_spring_height,
+          xArch,
+          place.windowTop,
+          "arch rise " + fmtMm(p.window_arch_rise) + " mm",
+          0.02 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xTotal,
+          place.windowBottom,
+          xTotal,
+          place.windowTop,
+          "total " + fmtMm(place.windowTotalHeight) + " mm",
+          0.02 * xSpan,
+          0
+        );
+      }
       addDim(
         layout,
         xBottom,
@@ -1394,26 +1398,32 @@
         -0.03 * xSpan,
         0
       );
-      addDim(
-        layout,
-        p.opening_center_x,
-        yCenter,
-        place.windowCenterX,
-        yCenter,
-        "center offset x " + fmtMm(p.window_center_offset_x) + " mm",
-        0,
-        -0.03 * ySpan
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          p.opening_center_x,
+          yCenter,
+          place.windowCenterX,
+          yCenter,
+          "center offset x " + fmtMm(p.window_center_offset_x) + " mm",
+          0,
+          -0.03 * ySpan
+        );
+      }
       if (showPdfAnn) {
         addHingeTable(layout, p, place.hingeXClosed, place.windowBottom, frontTableX, frontTableY);
       }
+      const frontXMin = showPdfAnn
+        ? Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed, frontTableX)
+        : Math.min(place.openingLeft, place.windowLeft, place.hingeXClosed);
+      const frontXMax = showPdfAnn
+        ? Math.max(place.openingRight, xTotal, place.hingeXClosed)
+        : Math.max(place.openingRight, place.windowRight, place.hingeXClosed);
       layout.xaxis = {
         title: "x (mm)",
         range: [
-          (showPdfAnn
-            ? Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed, frontTableX)
-            : Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed)) - 0.2 * xSpan,
-          Math.max(place.openingRight, xTotal, place.hingeXClosed) + 0.2 * xSpan
+          frontXMin - 0.2 * xSpan,
+          frontXMax + 0.2 * xSpan
         ],
         zeroline: false,
         showgrid: true,
@@ -1422,10 +1432,11 @@
       const frontYMax = showPdfAnn
         ? Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth, yRightGap, frontTableY)
         : Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth);
+      const frontYMin = showPdfAnn ? Math.min(0, yCenter) : Math.min(0, yWidth);
       layout.yaxis = {
         title: "y (mm)",
         range: [
-          Math.min(0, yCenter) - 0.08 * ySpan,
+          frontYMin - 0.08 * ySpan,
           frontYMax + 0.12 * ySpan
         ],
         scaleanchor: "x",
@@ -1748,48 +1759,50 @@
         borderpad: 2
       });
       const xMidOpening = (place.openingLeft + place.openingRight) / 2;
-      layout.annotations.push({
-        x: xMidOpening,
-        y: 0,
-        xref: "x",
-        yref: "y",
-        ax: xMidOpening,
-        ay: -0.12 * Math.max(1, p.opening_depth),
-        axref: "x",
-        ayref: "y",
-        text: "inside",
-        showarrow: true,
-        arrowhead: 2,
-        arrowside: "end",
-        arrowwidth: 1.4,
-        arrowcolor: "#2f3a4a",
-        bgcolor: "rgba(255,255,255,0.88)",
-        bordercolor: "#d8deea",
-        borderwidth: 1,
-        borderpad: 2,
-        font: { size: 11, color: "#1f2937" }
-      });
-      layout.annotations.push({
-        x: xMidOpening,
-        y: p.opening_depth,
-        xref: "x",
-        yref: "y",
-        ax: xMidOpening,
-        ay: p.opening_depth + 0.12 * Math.max(1, p.opening_depth),
-        axref: "x",
-        ayref: "y",
-        text: "outside",
-        showarrow: true,
-        arrowhead: 2,
-        arrowside: "end",
-        arrowwidth: 1.4,
-        arrowcolor: "#2f3a4a",
-        bgcolor: "rgba(255,255,255,0.88)",
-        bordercolor: "#d8deea",
-        borderwidth: 1,
-        borderpad: 2,
-        font: { size: 11, color: "#1f2937" }
-      });
+      if (showPdfAnn) {
+        layout.annotations.push({
+          x: xMidOpening,
+          y: 0,
+          xref: "x",
+          yref: "y",
+          ax: xMidOpening,
+          ay: -0.12 * Math.max(1, p.opening_depth),
+          axref: "x",
+          ayref: "y",
+          text: "inside",
+          showarrow: true,
+          arrowhead: 2,
+          arrowside: "end",
+          arrowwidth: 1.4,
+          arrowcolor: "#2f3a4a",
+          bgcolor: "rgba(255,255,255,0.88)",
+          bordercolor: "#d8deea",
+          borderwidth: 1,
+          borderpad: 2,
+          font: { size: 11, color: "#1f2937" }
+        });
+        layout.annotations.push({
+          x: xMidOpening,
+          y: p.opening_depth,
+          xref: "x",
+          yref: "y",
+          ax: xMidOpening,
+          ay: p.opening_depth + 0.12 * Math.max(1, p.opening_depth),
+          axref: "x",
+          ayref: "y",
+          text: "outside",
+          showarrow: true,
+          arrowhead: 2,
+          arrowside: "end",
+          arrowwidth: 1.4,
+          arrowcolor: "#2f3a4a",
+          bgcolor: "rgba(255,255,255,0.88)",
+          bordercolor: "#d8deea",
+          borderwidth: 1,
+          borderpad: 2,
+          font: { size: 11, color: "#1f2937" }
+        });
+      }
       const topGeomX = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
@@ -1807,26 +1820,28 @@
       const topInnerDepthX = topXMax + 0.11 * topXSpan;
       const topThicknessX = topXMax + 0.2 * topXSpan;
       const topOpeningDepthX = topXMax + 0.29 * topXSpan;
-      addDim(
-        layout,
-        topInnerDepthX,
-        0,
-        topInnerDepthX,
-        place.zNear,
-        "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
-        0.04 * topXSpan,
-        0
-      );
-      addDim(
-        layout,
-        topThicknessX,
-        place.zNear,
-        topThicknessX,
-        place.zFar,
-        "thickness " + fmtMm(p.window_thickness) + " mm",
-        0.04 * topXSpan,
-        0
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          topInnerDepthX,
+          0,
+          topInnerDepthX,
+          place.zNear,
+          "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
+          0.04 * topXSpan,
+          0
+        );
+        addDim(
+          layout,
+          topThicknessX,
+          place.zNear,
+          topThicknessX,
+          place.zFar,
+          "thickness " + fmtMm(p.window_thickness) + " mm",
+          0.04 * topXSpan,
+          0
+        );
+      }
       addDim(
         layout,
         topOpeningDepthX,
@@ -1845,10 +1860,10 @@
 
       const extraTopX = showPdfAnn
         ? [topTableX, topInnerDepthX, topThicknessX, topOpeningDepthX]
-        : [topInnerDepthX, topThicknessX, topOpeningDepthX];
+        : [topOpeningDepthX];
       const extraTopY = showPdfAnn
         ? [topTableY, place.zNear, place.zFar, p.opening_depth]
-        : [place.zNear, place.zFar, p.opening_depth];
+        : [p.opening_depth];
       const xAll = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
