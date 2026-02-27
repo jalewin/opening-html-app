@@ -106,6 +106,29 @@
       letter-spacing: 0.06em;
     }
 
+    details.fold {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    details.fold > summary {
+      list-style: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      user-select: none;
+    }
+
+    details.fold > summary::-webkit-details-marker {
+      display: none;
+    }
+
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -383,8 +406,8 @@
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Solver And Plot</legend>
+        <details class="fold">
+          <summary>Solver And Plot</summary>
           <div class="inline">
             <input id="auto_angle" type="checkbox" checked>
             <label for="auto_angle">Auto-compute max angle</label>
@@ -416,7 +439,7 @@
           <label>Surface transparency <span id="surface_transparency_label">65%</span>
             <input id="surface_transparency" type="range" min="0" max="95" step="1" value="65">
           </label>
-        </fieldset>
+        </details>
 
         <fieldset>
           <legend>Saved Settings</legend>
