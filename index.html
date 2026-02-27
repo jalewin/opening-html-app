@@ -1482,6 +1482,7 @@
       const ySpan = Math.max(1, place.openingTotalHeight);
       const xSpan = Math.max(1, p.opening_depth);
       const yDepth = -0.08 * ySpan;
+      const yInnerDepth = yDepth - 0.1 * ySpan;
       const yThick = place.windowTop + 0.08 * ySpan;
       const zMin = Math.min(0, place.zNear, place.hingeZ);
       const zMax = Math.max(p.opening_depth, place.zFar, place.hingeZ);
@@ -1497,6 +1498,16 @@
         p.opening_depth,
         yDepth,
         "opening depth " + fmtMm(p.opening_depth) + " mm",
+        0,
+        -0.03 * ySpan
+      );
+      addDim(
+        layout,
+        0,
+        yInnerDepth,
+        place.zNear,
+        yInnerDepth,
+        "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
         0,
         -0.03 * ySpan
       );
@@ -1571,7 +1582,7 @@
       layout.yaxis = {
         title: "y (mm)",
         range: [
-          Math.min(0, yDepth) - 0.08 * ySpan,
+          Math.min(0, yDepth, yInnerDepth) - 0.08 * ySpan,
           (showPdfAnn
             ? Math.max(place.openingTotalHeight, yThick, sideTableY)
             : Math.max(place.openingTotalHeight, yThick)) + 0.1 * ySpan
@@ -1770,14 +1781,25 @@
       const topZMax = Math.max(...topGeomZ);
       const topXSpan = Math.max(1, topXMax - topXMin);
       const topZSpan = Math.max(1, topZMax - topZMin);
+      const topInnerDepthX = topXMax + 0.11 * topXSpan;
+      addDim(
+        layout,
+        topInnerDepthX,
+        0,
+        topInnerDepthX,
+        place.zNear,
+        "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
+        0.04 * topXSpan,
+        0
+      );
       const topTableX = topXMin - 0.18 * topXSpan;
       const topTableY = p.opening_depth;
       if (showPdfAnn) {
         addHingeTable(layout, p, place.hingeXClosed, place.hingeZ, topTableX, topTableY);
       }
 
-      const extraTopX = showPdfAnn ? [topTableX] : [];
-      const extraTopY = showPdfAnn ? [topTableY] : [];
+      const extraTopX = showPdfAnn ? [topTableX, topInnerDepthX] : [topInnerDepthX];
+      const extraTopY = showPdfAnn ? [topTableY, place.zNear] : [place.zNear];
       const xAll = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
