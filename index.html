@@ -531,7 +531,6 @@
       displayModeBar: false,
       staticPlot: false
     };
-    const SAVED_SETTINGS_STORAGE_KEY = "arched-collision-saved-settings-v1";
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyD4-RtkZXOxZ0L3lBXLGNwW7zG6OK4g2lY",
       authDomain: "window-collision.firebaseapp.com",
@@ -546,10 +545,11 @@
     const APP_STATE = {
       dirty: true,
       renderInFlight: false,
+      exportInFlight: false,
       lastRenderAt: 0
     };
     const SETTINGS_STATE = {
-      backend: "local",
+      backend: "firebase",
       initialized: false,
       records: []
     };
@@ -1816,6 +1816,7 @@
 
     async function exportViewsPdf() {
       let restored = false;
+      APP_STATE.exportInFlight = true;
       try {
         if (!LAST_RENDER) {
           throw new Error("Render a scenario first, then export PDF.");
@@ -1887,6 +1888,7 @@
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       } finally {
+        APP_STATE.exportInFlight = false;
         if (LAST_RENDER) {
           try {
             await renderStaticViews(LAST_RENDER.params, LAST_RENDER.angleDeg, "web");
@@ -1927,39 +1929,16 @@
       APP_STATE.dirty = true;
     }
 
-    function getSavedSettingsMap() {
-      try {
-        const raw = localStorage.getItem(SAVED_SETTINGS_STORAGE_KEY);
-        if (!raw) {
-          return {};
-        }
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          return {};
-        }
-        return parsed;
-      } catch (err) {
-        return {};
-      }
-    }
-
-    function writeSavedSettingsMap(mapObj) {
-      localStorage.setItem(SAVED_SETTINGS_STORAGE_KEY, JSON.stringify(mapObj));
-    }
-
-    function toLocalRecords(settingsMap) {
-      return Object.keys(settingsMap)
-        .sort((a, b) => a.localeCompare(b))
-        .map((name) => ({
-          id: name,
-          name: name,
-          params: settingsMap[name],
-          source: "local"
-        }));
-    }
-
     function settingDocId(settingName) {
       return encodeURIComponent(settingName);
+    }
+
+    function decodeSettingDocId(docId) {
+      try {
+        return decodeURIComponent(docId);
+      } catch (err) {
+        return docId;
+      }
     }
 
     async function initSettingsStore() {
@@ -1974,7 +1953,8 @@
         FIREBASE_USER = authRes.user;
         SETTINGS_STATE.backend = "firebase";
       } catch (err) {
-        SETTINGS_STATE.backend = "local";
+        SETTINGS_STATE.backend = "unavailable";
+        SETTINGS_STATE.records = [];
       }
       SETTINGS_STATE.initialized = true;
       await reloadSettingsRecords();
@@ -1982,7 +1962,7 @@
 
     async function fetchFirebaseRecords() {
       if (!FIREBASE_DB) {
-        return [];
+        throw new Error("Shared settings are unavailable because Firebase is not connected.");
       }
       const out = [];
       const q = query(collection(FIREBASE_DB, SHARED_SETTINGS_COLLECTION), orderBy("name"));
@@ -1992,7 +1972,7 @@
         if (!data || typeof data !== "object" || !data.params || typeof data.params !== "object") {
           return;
         }
-        const fallbackName = decodeURIComponent(docSnap.id);
+        const fallbackName = decodeSettingDocId(docSnap.id);
         out.push({
           id: docSnap.id,
           name: typeof data.name === "string" && data.name.trim() ? data.name : fallbackName,
@@ -2005,18 +1985,19 @@
 
     async function reloadSettingsRecords() {
       if (SETTINGS_STATE.backend === "firebase") {
-        try {
-          SETTINGS_STATE.records = await fetchFirebaseRecords();
-          return;
-        } catch (err) {
-          SETTINGS_STATE.backend = "local";
-        }
+        SETTINGS_STATE.records = await fetchFirebaseRecords();
+        return;
       }
-      SETTINGS_STATE.records = toLocalRecords(getSavedSettingsMap());
+      SETTINGS_STATE.records = [];
     }
 
     async function refreshSavedSettingsDropdown(selectedId) {
-      await reloadSettingsRecords();
+      try {
+        await reloadSettingsRecords();
+      } catch (err) {
+        SETTINGS_STATE.records = [];
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
       const selectEl = document.getElementById("saved_settings_select");
       selectEl.innerHTML = "<option value=\"\">Select saved setting...</option>";
       for (const rec of SETTINGS_STATE.records) {
@@ -2087,18 +2068,16 @@
     function applyParamsToInputs(params) {
       const openingArchRiseLoaded = params.opening_arch_rise;
       const windowArchRiseLoaded = params.window_arch_rise;
+      const merged = { ...DEFAULTS, ...params };
       for (const key of Object.keys(DEFAULTS)) {
         const el = document.getElementById(key);
         if (!el) {
           continue;
         }
-        if (!(key in params)) {
-          continue;
-        }
         if (el.type === "checkbox") {
-          el.checked = Boolean(params[key]);
+          el.checked = Boolean(merged[key]);
         } else {
-          el.value = String(params[key]);
+          el.value = String(merged[key]);
         }
       }
       syncManualAngleState();
@@ -2127,30 +2106,25 @@
         }
         const params = readParams();
         validateParams(params);
-        if (SETTINGS_STATE.backend === "firebase" && FIREBASE_DB) {
-          const docId = settingDocId(settingName);
-          const ref = doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, docId);
-          const existing = await getDoc(ref);
-          const payload = {
-            name: settingName,
-            params: params,
-            updatedAt: serverTimestamp(),
-            updatedByUid: FIREBASE_USER ? FIREBASE_USER.uid : null
-          };
-          if (!existing.exists()) {
-            payload.createdAt = serverTimestamp();
-            payload.createdByUid = FIREBASE_USER ? FIREBASE_USER.uid : null;
-          }
-          await setDoc(ref, payload, { merge: true });
-          await refreshSavedSettingsDropdown(docId);
-          setStatus("Saved shared setting \"" + settingName + "\".", false);
-          return;
+        if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
+          throw new Error("Shared settings are unavailable because Firebase is not connected.");
         }
-        const settingsMap = getSavedSettingsMap();
-        settingsMap[settingName] = params;
-        writeSavedSettingsMap(settingsMap);
-        await refreshSavedSettingsDropdown(settingName);
-        setStatus("Saved local setting \"" + settingName + "\".", false);
+        const docId = settingDocId(settingName);
+        const ref = doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, docId);
+        const existing = await getDoc(ref);
+        const payload = {
+          name: settingName,
+          params: params,
+          updatedAt: serverTimestamp(),
+          updatedByUid: FIREBASE_USER ? FIREBASE_USER.uid : null
+        };
+        if (!existing.exists()) {
+          payload.createdAt = serverTimestamp();
+          payload.createdByUid = FIREBASE_USER ? FIREBASE_USER.uid : null;
+        }
+        await setDoc(ref, payload, { merge: true });
+        await refreshSavedSettingsDropdown(docId);
+        setStatus("Saved shared setting \"" + settingName + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2166,8 +2140,7 @@
         applyParamsToInputs(selected.params);
         document.getElementById("saved_setting_name").value = selected.name;
         document.getElementById("delete_setting_btn").disabled = false;
-        const sourceLabel = selected.source === "firebase" ? "shared" : "local";
-        setStatus("Loaded " + sourceLabel + " setting \"" + selected.name + "\".", false);
+        setStatus("Loaded shared setting \"" + selected.name + "\".", false);
         await render();
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
@@ -2180,26 +2153,15 @@
         if (!selected) {
           throw new Error("Select a saved setting to delete.");
         }
-        if (SETTINGS_STATE.backend === "firebase" && FIREBASE_DB) {
-          await deleteDoc(doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, selected.id));
-          await refreshSavedSettingsDropdown("");
-          if (document.getElementById("saved_setting_name").value === selected.name) {
-            document.getElementById("saved_setting_name").value = "";
-          }
-          setStatus("Deleted shared setting \"" + selected.name + "\".", false);
-          return;
+        if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
+          throw new Error("Shared settings are unavailable because Firebase is not connected.");
         }
-        const settingsMap = getSavedSettingsMap();
-        if (!settingsMap[selected.name]) {
-          throw new Error("Saved setting not found: " + selected.name);
-        }
-        delete settingsMap[selected.name];
-        writeSavedSettingsMap(settingsMap);
+        await deleteDoc(doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, selected.id));
         await refreshSavedSettingsDropdown("");
         if (document.getElementById("saved_setting_name").value === selected.name) {
           document.getElementById("saved_setting_name").value = "";
         }
-        setStatus("Deleted local setting \"" + selected.name + "\".", false);
+        setStatus("Deleted shared setting \"" + selected.name + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2360,7 +2322,7 @@
     }
 
     async function render() {
-      if (APP_STATE.renderInFlight) {
+      if (APP_STATE.renderInFlight || APP_STATE.exportInFlight) {
         return;
       }
       APP_STATE.renderInFlight = true;
@@ -2533,7 +2495,7 @@
       if (!document.getElementById("auto_render").checked) {
         return;
       }
-      if (!APP_STATE.dirty || APP_STATE.renderInFlight) {
+      if (!APP_STATE.dirty || APP_STATE.renderInFlight || APP_STATE.exportInFlight) {
         return;
       }
       const intervalSecRaw = Number(document.getElementById("auto_render_sec").value);
