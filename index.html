@@ -1782,6 +1782,8 @@
       const topXSpan = Math.max(1, topXMax - topXMin);
       const topZSpan = Math.max(1, topZMax - topZMin);
       const topInnerDepthX = topXMax + 0.11 * topXSpan;
+      const topThicknessX = topXMax + 0.2 * topXSpan;
+      const topOpeningDepthX = topXMax + 0.29 * topXSpan;
       addDim(
         layout,
         topInnerDepthX,
@@ -1792,14 +1794,38 @@
         0.04 * topXSpan,
         0
       );
+      addDim(
+        layout,
+        topThicknessX,
+        place.zNear,
+        topThicknessX,
+        place.zFar,
+        "thickness " + fmtMm(p.window_thickness) + " mm",
+        0.04 * topXSpan,
+        0
+      );
+      addDim(
+        layout,
+        topOpeningDepthX,
+        0,
+        topOpeningDepthX,
+        p.opening_depth,
+        "opening depth " + fmtMm(p.opening_depth) + " mm",
+        0.04 * topXSpan,
+        0
+      );
       const topTableX = topXMin - 0.18 * topXSpan;
       const topTableY = p.opening_depth;
       if (showPdfAnn) {
         addHingeTable(layout, p, place.hingeXClosed, place.hingeZ, topTableX, topTableY);
       }
 
-      const extraTopX = showPdfAnn ? [topTableX, topInnerDepthX] : [topInnerDepthX];
-      const extraTopY = showPdfAnn ? [topTableY, place.zNear] : [place.zNear];
+      const extraTopX = showPdfAnn
+        ? [topTableX, topInnerDepthX, topThicknessX, topOpeningDepthX]
+        : [topInnerDepthX, topThicknessX, topOpeningDepthX];
+      const extraTopY = showPdfAnn
+        ? [topTableY, place.zNear, place.zFar, p.opening_depth]
+        : [place.zNear, place.zFar, p.opening_depth];
       const xAll = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
