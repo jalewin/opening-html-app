@@ -1981,6 +1981,7 @@
         SETTINGS_STATE.backend = "unavailable";
         SETTINGS_STATE.lastError = errorToText(err);
         SETTINGS_STATE.records = [];
+        setStatus(sharedSettingsUnavailableMessage(), true);
       }
       SETTINGS_STATE.initialized = true;
       await reloadSettingsRecords();
