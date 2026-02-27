@@ -1817,8 +1817,8 @@
       const topZMax = Math.max(...topGeomZ);
       const topXSpan = Math.max(1, topXMax - topXMin);
       const topZSpan = Math.max(1, topZMax - topZMin);
-      const topInnerDepthX = topXMax + 0.11 * topXSpan;
-      const topThicknessX = topXMax + 0.2 * topXSpan;
+      const topInnerDepthX = topXMin - 0.11 * topXSpan;
+      const topThicknessX = topXMin - 0.2 * topXSpan;
       const topOpeningDepthX = topXMax + 0.29 * topXSpan;
       if (showPdfAnn) {
         addDim(
@@ -1828,7 +1828,7 @@
           topInnerDepthX,
           place.zNear,
           "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
-          0.04 * topXSpan,
+          -0.04 * topXSpan,
           0
         );
         addDim(
@@ -1838,7 +1838,7 @@
           topThicknessX,
           place.zFar,
           "thickness " + fmtMm(p.window_thickness) + " mm",
-          0.04 * topXSpan,
+          -0.04 * topXSpan,
           0
         );
       }
