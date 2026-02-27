@@ -60,6 +60,13 @@
       font-size: 14px;
     }
 
+    .version-line {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #3e4b5e;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 390px 1fr;
@@ -77,8 +84,9 @@
     .inputs {
       display: grid;
       gap: 12px;
-      max-height: calc(100vh - 80px);
+      max-height: calc(100vh - 180px);
       overflow: auto;
+      padding-bottom: 12px;
     }
 
     fieldset {
@@ -96,6 +104,29 @@
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.06em;
+    }
+
+    details.fold {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    details.fold > summary {
+      list-style: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      user-select: none;
+    }
+
+    details.fold > summary::-webkit-details-marker {
+      display: none;
     }
 
     .grid-2 {
@@ -288,6 +319,7 @@
     <section class="title">
       <h1>Arched Collision Tool</h1>
       <p>Single-file browser app for max opening angle and 3D geometry visualization.</p>
+      <div id="app_version" class="version-line"></div>
     </section>
 
     <section class="layout">
@@ -374,8 +406,8 @@
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Solver And Plot</legend>
+        <details class="fold">
+          <summary>Solver And Plot</summary>
           <div class="inline">
             <input id="auto_angle" type="checkbox" checked>
             <label for="auto_angle">Auto-compute max angle</label>
@@ -407,7 +439,7 @@
           <label>Surface transparency <span id="surface_transparency_label">65%</span>
             <input id="surface_transparency" type="range" min="0" max="95" step="1" value="65">
           </label>
-        </fieldset>
+        </details>
 
         <fieldset>
           <legend>Saved Settings</legend>
@@ -458,8 +490,24 @@
     </section>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      query,
+      orderBy,
+      getDocs,
+      doc,
+      setDoc,
+      getDoc,
+      deleteDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
     "use strict";
+    const Plotly = window.Plotly;
 
     const DEFAULTS = {
       opening_width: 1800,
@@ -515,14 +563,34 @@
       displayModeBar: false,
       staticPlot: false
     };
-    const SAVED_SETTINGS_STORAGE_KEY = "arched-collision-saved-settings-v1";
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBaiIWQ1fQSFfhyJdrkvpO-tBGgiP578kM",
+      authDomain: "window-collision.firebaseapp.com",
+      projectId: "window-collision",
+      storageBucket: "window-collision.firebasestorage.app",
+      messagingSenderId: "708789827921",
+      appId: "1:708789827921:web:79b470746393b3655dfb70"
+    };
+    const SHARED_SETTINGS_COLLECTION = "sharedSettings";
+    const APP_VERSION = "2026-02-27 / 9e02df7";
 
     let LAST_RENDER = null;
     const APP_STATE = {
       dirty: true,
       renderInFlight: false,
+      exportInFlight: false,
       lastRenderAt: 0
     };
+    const SETTINGS_STATE = {
+      backend: "firebase",
+      initialized: false,
+      lastError: "",
+      records: []
+    };
+    let FIREBASE_APP = null;
+    let FIREBASE_AUTH = null;
+    let FIREBASE_DB = null;
+    let FIREBASE_USER = null;
 
     function deg(rad) {
       return rad * 180 / Math.PI;
@@ -1224,26 +1292,28 @@
         0,
         0.03 * ySpan
       );
-      addDim(
-        layout,
-        xOpenSpring,
-        0,
-        xOpenSpring,
-        p.opening_spring_height,
-        "opening spring " + fmtMm(p.opening_spring_height) + " mm",
-        -0.03 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xOpenArch,
-        p.opening_spring_height,
-        xOpenArch,
-        place.openingTotalHeight,
-        "opening arch rise " + fmtMm(p.opening_arch_rise) + " mm",
-        -0.03 * xSpan,
-        0
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          xOpenSpring,
+          0,
+          xOpenSpring,
+          p.opening_spring_height,
+          "opening spring " + fmtMm(p.opening_spring_height) + " mm",
+          -0.03 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xOpenArch,
+          p.opening_spring_height,
+          xOpenArch,
+          place.openingTotalHeight,
+          "opening arch rise " + fmtMm(p.opening_arch_rise) + " mm",
+          -0.03 * xSpan,
+          0
+        );
+      }
       addDim(
         layout,
         xOpenHeight,
@@ -1286,36 +1356,38 @@
           0.03 * ySpan
         );
       }
-      addDim(
-        layout,
-        xSpring,
-        place.windowBottom,
-        xSpring,
-        place.windowBottom + p.window_spring_height,
-        "spring " + fmtMm(p.window_spring_height) + " mm",
-        0.02 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xArch,
-        place.windowBottom + p.window_spring_height,
-        xArch,
-        place.windowTop,
-        "arch rise " + fmtMm(p.window_arch_rise) + " mm",
-        0.02 * xSpan,
-        0
-      );
-      addDim(
-        layout,
-        xTotal,
-        place.windowBottom,
-        xTotal,
-        place.windowTop,
-        "total " + fmtMm(place.windowTotalHeight) + " mm",
-        0.02 * xSpan,
-        0
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          xSpring,
+          place.windowBottom,
+          xSpring,
+          place.windowBottom + p.window_spring_height,
+          "spring " + fmtMm(p.window_spring_height) + " mm",
+          0.02 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xArch,
+          place.windowBottom + p.window_spring_height,
+          xArch,
+          place.windowTop,
+          "arch rise " + fmtMm(p.window_arch_rise) + " mm",
+          0.02 * xSpan,
+          0
+        );
+        addDim(
+          layout,
+          xTotal,
+          place.windowBottom,
+          xTotal,
+          place.windowTop,
+          "total " + fmtMm(place.windowTotalHeight) + " mm",
+          0.02 * xSpan,
+          0
+        );
+      }
       addDim(
         layout,
         xBottom,
@@ -1326,26 +1398,32 @@
         -0.03 * xSpan,
         0
       );
-      addDim(
-        layout,
-        p.opening_center_x,
-        yCenter,
-        place.windowCenterX,
-        yCenter,
-        "center offset x " + fmtMm(p.window_center_offset_x) + " mm",
-        0,
-        -0.03 * ySpan
-      );
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          p.opening_center_x,
+          yCenter,
+          place.windowCenterX,
+          yCenter,
+          "center offset x " + fmtMm(p.window_center_offset_x) + " mm",
+          0,
+          -0.03 * ySpan
+        );
+      }
       if (showPdfAnn) {
         addHingeTable(layout, p, place.hingeXClosed, place.windowBottom, frontTableX, frontTableY);
       }
+      const frontXMin = showPdfAnn
+        ? Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed, frontTableX)
+        : Math.min(place.openingLeft, place.windowLeft, place.hingeXClosed);
+      const frontXMax = showPdfAnn
+        ? Math.max(place.openingRight, xTotal, place.hingeXClosed)
+        : Math.max(place.openingRight, place.windowRight, place.hingeXClosed);
       layout.xaxis = {
         title: "x (mm)",
         range: [
-          (showPdfAnn
-            ? Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed, frontTableX)
-            : Math.min(place.openingLeft, place.windowLeft, xOpenHeight, place.hingeXClosed)) - 0.2 * xSpan,
-          Math.max(place.openingRight, xTotal, place.hingeXClosed) + 0.2 * xSpan
+          frontXMin - 0.2 * xSpan,
+          frontXMax + 0.2 * xSpan
         ],
         zeroline: false,
         showgrid: true,
@@ -1354,10 +1432,11 @@
       const frontYMax = showPdfAnn
         ? Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth, yRightGap, frontTableY)
         : Math.max(place.openingTotalHeight, place.windowTop, yOpeningWidth);
+      const frontYMin = showPdfAnn ? Math.min(0, yCenter) : Math.min(0, yWidth);
       layout.yaxis = {
         title: "y (mm)",
         range: [
-          Math.min(0, yCenter) - 0.08 * ySpan,
+          frontYMin - 0.08 * ySpan,
           frontYMax + 0.12 * ySpan
         ],
         scaleanchor: "x",
@@ -1437,6 +1516,7 @@
       const ySpan = Math.max(1, place.openingTotalHeight);
       const xSpan = Math.max(1, p.opening_depth);
       const yDepth = -0.08 * ySpan;
+      const yInnerDepth = yDepth - 0.1 * ySpan;
       const yThick = place.windowTop + 0.08 * ySpan;
       const zMin = Math.min(0, place.zNear, place.hingeZ);
       const zMax = Math.max(p.opening_depth, place.zFar, place.hingeZ);
@@ -1452,6 +1532,16 @@
         p.opening_depth,
         yDepth,
         "opening depth " + fmtMm(p.opening_depth) + " mm",
+        0,
+        -0.03 * ySpan
+      );
+      addDim(
+        layout,
+        0,
+        yInnerDepth,
+        place.zNear,
+        yInnerDepth,
+        "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
         0,
         -0.03 * ySpan
       );
@@ -1526,7 +1616,7 @@
       layout.yaxis = {
         title: "y (mm)",
         range: [
-          Math.min(0, yDepth) - 0.08 * ySpan,
+          Math.min(0, yDepth, yInnerDepth) - 0.08 * ySpan,
           (showPdfAnn
             ? Math.max(place.openingTotalHeight, yThick, sideTableY)
             : Math.max(place.openingTotalHeight, yThick)) + 0.1 * ySpan
@@ -1669,48 +1759,50 @@
         borderpad: 2
       });
       const xMidOpening = (place.openingLeft + place.openingRight) / 2;
-      layout.annotations.push({
-        x: xMidOpening,
-        y: 0,
-        xref: "x",
-        yref: "y",
-        ax: xMidOpening,
-        ay: -0.12 * Math.max(1, p.opening_depth),
-        axref: "x",
-        ayref: "y",
-        text: "inside",
-        showarrow: true,
-        arrowhead: 2,
-        arrowside: "end",
-        arrowwidth: 1.4,
-        arrowcolor: "#2f3a4a",
-        bgcolor: "rgba(255,255,255,0.88)",
-        bordercolor: "#d8deea",
-        borderwidth: 1,
-        borderpad: 2,
-        font: { size: 11, color: "#1f2937" }
-      });
-      layout.annotations.push({
-        x: xMidOpening,
-        y: p.opening_depth,
-        xref: "x",
-        yref: "y",
-        ax: xMidOpening,
-        ay: p.opening_depth + 0.12 * Math.max(1, p.opening_depth),
-        axref: "x",
-        ayref: "y",
-        text: "outside",
-        showarrow: true,
-        arrowhead: 2,
-        arrowside: "end",
-        arrowwidth: 1.4,
-        arrowcolor: "#2f3a4a",
-        bgcolor: "rgba(255,255,255,0.88)",
-        bordercolor: "#d8deea",
-        borderwidth: 1,
-        borderpad: 2,
-        font: { size: 11, color: "#1f2937" }
-      });
+      if (showPdfAnn) {
+        layout.annotations.push({
+          x: xMidOpening,
+          y: 0,
+          xref: "x",
+          yref: "y",
+          ax: xMidOpening,
+          ay: -0.12 * Math.max(1, p.opening_depth),
+          axref: "x",
+          ayref: "y",
+          text: "inside",
+          showarrow: true,
+          arrowhead: 2,
+          arrowside: "end",
+          arrowwidth: 1.4,
+          arrowcolor: "#2f3a4a",
+          bgcolor: "rgba(255,255,255,0.88)",
+          bordercolor: "#d8deea",
+          borderwidth: 1,
+          borderpad: 2,
+          font: { size: 11, color: "#1f2937" }
+        });
+        layout.annotations.push({
+          x: xMidOpening,
+          y: p.opening_depth,
+          xref: "x",
+          yref: "y",
+          ax: xMidOpening,
+          ay: p.opening_depth + 0.12 * Math.max(1, p.opening_depth),
+          axref: "x",
+          ayref: "y",
+          text: "outside",
+          showarrow: true,
+          arrowhead: 2,
+          arrowside: "end",
+          arrowwidth: 1.4,
+          arrowcolor: "#2f3a4a",
+          bgcolor: "rgba(255,255,255,0.88)",
+          bordercolor: "#d8deea",
+          borderwidth: 1,
+          borderpad: 2,
+          font: { size: 11, color: "#1f2937" }
+        });
+      }
       const topGeomX = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
@@ -1725,14 +1817,53 @@
       const topZMax = Math.max(...topGeomZ);
       const topXSpan = Math.max(1, topXMax - topXMin);
       const topZSpan = Math.max(1, topZMax - topZMin);
+      const topInnerDepthX = topXMin - 0.11 * topXSpan;
+      const topThicknessX = topXMin - 0.2 * topXSpan;
+      const topOpeningDepthX = topXMax + 0.29 * topXSpan;
+      if (showPdfAnn) {
+        addDim(
+          layout,
+          topInnerDepthX,
+          0,
+          topInnerDepthX,
+          place.zNear,
+          "inner pane depth " + fmtMm(p.window_hinge_depth) + " mm",
+          -0.04 * topXSpan,
+          0
+        );
+        addDim(
+          layout,
+          topThicknessX,
+          place.zNear,
+          topThicknessX,
+          place.zFar,
+          "thickness " + fmtMm(p.window_thickness) + " mm",
+          -0.04 * topXSpan,
+          0
+        );
+      }
+      addDim(
+        layout,
+        topOpeningDepthX,
+        0,
+        topOpeningDepthX,
+        p.opening_depth,
+        "opening depth " + fmtMm(p.opening_depth) + " mm",
+        0.04 * topXSpan,
+        0
+      );
       const topTableX = topXMin - 0.18 * topXSpan;
       const topTableY = p.opening_depth;
       if (showPdfAnn) {
         addHingeTable(layout, p, place.hingeXClosed, place.hingeZ, topTableX, topTableY);
       }
 
-      const extraTopX = showPdfAnn ? [topTableX] : [];
-      const extraTopY = showPdfAnn ? [topTableY] : [];
+      const extraTopX = showPdfAnn
+        ? [topTableX, topInnerDepthX, topThicknessX, topOpeningDepthX]
+        : [topOpeningDepthX];
+      const extraTopY = showPdfAnn
+        ? [topTableY, place.zNear, place.zFar, p.opening_depth]
+        : [p.opening_depth];
       const xAll = openingTop.x
         .concat(openTop.x)
         .concat(closedTop.x)
@@ -1782,6 +1913,7 @@
 
     async function exportViewsPdf() {
       let restored = false;
+      APP_STATE.exportInFlight = true;
       try {
         if (!LAST_RENDER) {
           throw new Error("Render a scenario first, then export PDF.");
@@ -1853,6 +1985,7 @@
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       } finally {
+        APP_STATE.exportInFlight = false;
         if (LAST_RENDER) {
           try {
             await renderStaticViews(LAST_RENDER.params, LAST_RENDER.angleDeg, "web");
@@ -1893,41 +2026,116 @@
       APP_STATE.dirty = true;
     }
 
-    function getSavedSettingsMap() {
+    function settingDocId(settingName) {
+      return encodeURIComponent(settingName);
+    }
+
+    function decodeSettingDocId(docId) {
       try {
-        const raw = localStorage.getItem(SAVED_SETTINGS_STORAGE_KEY);
-        if (!raw) {
-          return {};
-        }
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          return {};
-        }
-        return parsed;
+        return decodeURIComponent(docId);
       } catch (err) {
-        return {};
+        return docId;
       }
     }
 
-    function writeSavedSettingsMap(mapObj) {
-      localStorage.setItem(SAVED_SETTINGS_STORAGE_KEY, JSON.stringify(mapObj));
+    function errorToText(err) {
+      if (!err) return "";
+      if (err.code && err.message) return String(err.code) + ": " + String(err.message);
+      if (err.code) return String(err.code);
+      if (err.message) return String(err.message);
+      return String(err);
     }
 
-    function refreshSavedSettingsDropdown(selectedName) {
+    function sharedSettingsUnavailableMessage() {
+      const base = "Shared settings are unavailable because Firebase is not connected.";
+      return SETTINGS_STATE.lastError ? (base + " " + SETTINGS_STATE.lastError) : base;
+    }
+
+    async function initSettingsStore() {
+      if (SETTINGS_STATE.initialized) {
+        return;
+      }
+      try {
+        FIREBASE_APP = initializeApp(FIREBASE_CONFIG);
+        FIREBASE_AUTH = getAuth(FIREBASE_APP);
+        FIREBASE_DB = getFirestore(FIREBASE_APP);
+        const authRes = await signInAnonymously(FIREBASE_AUTH);
+        FIREBASE_USER = authRes.user;
+        SETTINGS_STATE.backend = "firebase";
+        SETTINGS_STATE.lastError = "";
+      } catch (err) {
+        SETTINGS_STATE.backend = "unavailable";
+        SETTINGS_STATE.lastError = errorToText(err);
+        SETTINGS_STATE.records = [];
+        setStatus(sharedSettingsUnavailableMessage(), true);
+      }
+      SETTINGS_STATE.initialized = true;
+      await reloadSettingsRecords();
+    }
+
+    async function fetchFirebaseRecords() {
+      if (!FIREBASE_DB) {
+        throw new Error(sharedSettingsUnavailableMessage());
+      }
+      const out = [];
+      const q = query(collection(FIREBASE_DB, SHARED_SETTINGS_COLLECTION), orderBy("name"));
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data || typeof data !== "object" || !data.params || typeof data.params !== "object") {
+          return;
+        }
+        const fallbackName = decodeSettingDocId(docSnap.id);
+        out.push({
+          id: docSnap.id,
+          name: typeof data.name === "string" && data.name.trim() ? data.name : fallbackName,
+          params: data.params,
+          source: "firebase"
+        });
+      });
+      return out;
+    }
+
+    async function reloadSettingsRecords() {
+      if (SETTINGS_STATE.backend === "firebase") {
+        SETTINGS_STATE.records = await fetchFirebaseRecords();
+        return;
+      }
+      SETTINGS_STATE.records = [];
+    }
+
+    async function refreshSavedSettingsDropdown(selectedId) {
+      try {
+        await reloadSettingsRecords();
+      } catch (err) {
+        SETTINGS_STATE.records = [];
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
       const selectEl = document.getElementById("saved_settings_select");
-      const settingsMap = getSavedSettingsMap();
-      const names = Object.keys(settingsMap).sort((a, b) => a.localeCompare(b));
       selectEl.innerHTML = "<option value=\"\">Select saved setting...</option>";
-      for (const name of names) {
+      for (const rec of SETTINGS_STATE.records) {
         const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = rec.id;
+        opt.textContent = rec.name;
         selectEl.appendChild(opt);
       }
-      if (selectedName && settingsMap[selectedName]) {
-        selectEl.value = selectedName;
+      if (selectedId && SETTINGS_STATE.records.some(rec => rec.id === selectedId)) {
+        selectEl.value = selectedId;
       }
       document.getElementById("delete_setting_btn").disabled = !selectEl.value;
+    }
+
+    function getSelectedSettingRecord() {
+      const selectedId = normalizeSettingName(document.getElementById("saved_settings_select").value);
+      if (!selectedId) {
+        return null;
+      }
+      for (const rec of SETTINGS_STATE.records) {
+        if (rec.id === selectedId) {
+          return rec;
+        }
+      }
+      return null;
     }
 
     function readParams() {
@@ -1973,18 +2181,16 @@
     function applyParamsToInputs(params) {
       const openingArchRiseLoaded = params.opening_arch_rise;
       const windowArchRiseLoaded = params.window_arch_rise;
+      const merged = { ...DEFAULTS, ...params };
       for (const key of Object.keys(DEFAULTS)) {
         const el = document.getElementById(key);
         if (!el) {
           continue;
         }
-        if (!(key in params)) {
-          continue;
-        }
         if (el.type === "checkbox") {
-          el.checked = Boolean(params[key]);
+          el.checked = Boolean(merged[key]);
         } else {
-          el.value = String(params[key]);
+          el.value = String(merged[key]);
         }
       }
       syncManualAngleState();
@@ -2004,7 +2210,7 @@
       return String(rawName || "").trim();
     }
 
-    function saveCurrentSetting() {
+    async function saveCurrentSetting() {
       try {
         const nameInput = document.getElementById("saved_setting_name");
         const settingName = normalizeSettingName(nameInput.value);
@@ -2013,11 +2219,25 @@
         }
         const params = readParams();
         validateParams(params);
-        const settingsMap = getSavedSettingsMap();
-        settingsMap[settingName] = params;
-        writeSavedSettingsMap(settingsMap);
-        refreshSavedSettingsDropdown(settingName);
-        setStatus("Saved setting \"" + settingName + "\".", false);
+        if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
+          throw new Error(sharedSettingsUnavailableMessage());
+        }
+        const docId = settingDocId(settingName);
+        const ref = doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, docId);
+        const existing = await getDoc(ref);
+        const payload = {
+          name: settingName,
+          params: params,
+          updatedAt: serverTimestamp(),
+          updatedByUid: FIREBASE_USER ? FIREBASE_USER.uid : null
+        };
+        if (!existing.exists()) {
+          payload.createdAt = serverTimestamp();
+          payload.createdByUid = FIREBASE_USER ? FIREBASE_USER.uid : null;
+        }
+        await setDoc(ref, payload, { merge: true });
+        await refreshSavedSettingsDropdown(docId);
+        setStatus("Saved shared setting \"" + settingName + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2025,44 +2245,36 @@
 
     async function loadSelectedSetting() {
       try {
-        const selectEl = document.getElementById("saved_settings_select");
-        const settingName = normalizeSettingName(selectEl.value);
-        if (!settingName) {
+        const selected = getSelectedSettingRecord();
+        if (!selected) {
           document.getElementById("delete_setting_btn").disabled = true;
           return;
         }
-        const settingsMap = getSavedSettingsMap();
-        if (!settingsMap[settingName]) {
-          throw new Error("Saved setting not found: " + settingName);
-        }
-        applyParamsToInputs(settingsMap[settingName]);
-        document.getElementById("saved_setting_name").value = settingName;
+        applyParamsToInputs(selected.params);
+        document.getElementById("saved_setting_name").value = selected.name;
         document.getElementById("delete_setting_btn").disabled = false;
-        setStatus("Loaded setting \"" + settingName + "\".", false);
+        setStatus("Loaded shared setting \"" + selected.name + "\".", false);
         await render();
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
     }
 
-    function deleteSelectedSetting() {
+    async function deleteSelectedSetting() {
       try {
-        const selectEl = document.getElementById("saved_settings_select");
-        const settingName = normalizeSettingName(selectEl.value);
-        if (!settingName) {
+        const selected = getSelectedSettingRecord();
+        if (!selected) {
           throw new Error("Select a saved setting to delete.");
         }
-        const settingsMap = getSavedSettingsMap();
-        if (!settingsMap[settingName]) {
-          throw new Error("Saved setting not found: " + settingName);
+        if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
+          throw new Error(sharedSettingsUnavailableMessage());
         }
-        delete settingsMap[settingName];
-        writeSavedSettingsMap(settingsMap);
-        refreshSavedSettingsDropdown("");
-        if (document.getElementById("saved_setting_name").value === settingName) {
+        await deleteDoc(doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, selected.id));
+        await refreshSavedSettingsDropdown("");
+        if (document.getElementById("saved_setting_name").value === selected.name) {
           document.getElementById("saved_setting_name").value = "";
         }
-        setStatus("Deleted setting \"" + settingName + "\".", false);
+        setStatus("Deleted shared setting \"" + selected.name + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2223,7 +2435,7 @@
     }
 
     async function render() {
-      if (APP_STATE.renderInFlight) {
+      if (APP_STATE.renderInFlight || APP_STATE.exportInFlight) {
         return;
       }
       APP_STATE.renderInFlight = true;
@@ -2396,7 +2608,7 @@
       if (!document.getElementById("auto_render").checked) {
         return;
       }
-      if (!APP_STATE.dirty || APP_STATE.renderInFlight) {
+      if (!APP_STATE.dirty || APP_STATE.renderInFlight || APP_STATE.exportInFlight) {
         return;
       }
       const intervalSecRaw = Number(document.getElementById("auto_render_sec").value);
@@ -2407,9 +2619,15 @@
       render();
     }, 500);
 
-    setDefaults();
-    refreshSavedSettingsDropdown("");
-    render();
+    async function bootApp() {
+      document.getElementById("app_version").textContent = "Version: " + APP_VERSION;
+      setDefaults();
+      await initSettingsStore();
+      await refreshSavedSettingsDropdown("");
+      await render();
+    }
+
+    bootApp();
   </script>
 </body>
 </html>
