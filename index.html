@@ -458,8 +458,24 @@
     </section>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      query,
+      orderBy,
+      getDocs,
+      doc,
+      setDoc,
+      getDoc,
+      deleteDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
     "use strict";
+    const Plotly = window.Plotly;
 
     const DEFAULTS = {
       opening_width: 1800,
@@ -516,6 +532,15 @@
       staticPlot: false
     };
     const SAVED_SETTINGS_STORAGE_KEY = "arched-collision-saved-settings-v1";
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyDpIVzvyRWtl3COOH9p2E3Flr0uuLSoTHQ",
+      authDomain: "window-collision.firebaseapp.com",
+      projectId: "window-collision",
+      storageBucket: "window-collision.firebasestorage.app",
+      messagingSenderId: "708789827921",
+      appId: "1:708789827921:web:79b470746393b3655dfb70"
+    };
+    const SHARED_SETTINGS_COLLECTION = "sharedSettings";
 
     let LAST_RENDER = null;
     const APP_STATE = {
@@ -523,6 +548,15 @@
       renderInFlight: false,
       lastRenderAt: 0
     };
+    const SETTINGS_STATE = {
+      backend: "local",
+      initialized: false,
+      records: []
+    };
+    let FIREBASE_APP = null;
+    let FIREBASE_AUTH = null;
+    let FIREBASE_DB = null;
+    let FIREBASE_USER = null;
 
     function deg(rad) {
       return rad * 180 / Math.PI;
@@ -1913,21 +1947,101 @@
       localStorage.setItem(SAVED_SETTINGS_STORAGE_KEY, JSON.stringify(mapObj));
     }
 
-    function refreshSavedSettingsDropdown(selectedName) {
+    function toLocalRecords(settingsMap) {
+      return Object.keys(settingsMap)
+        .sort((a, b) => a.localeCompare(b))
+        .map((name) => ({
+          id: name,
+          name: name,
+          params: settingsMap[name],
+          source: "local"
+        }));
+    }
+
+    function settingDocId(settingName) {
+      return encodeURIComponent(settingName);
+    }
+
+    async function initSettingsStore() {
+      if (SETTINGS_STATE.initialized) {
+        return;
+      }
+      try {
+        FIREBASE_APP = initializeApp(FIREBASE_CONFIG);
+        FIREBASE_AUTH = getAuth(FIREBASE_APP);
+        FIREBASE_DB = getFirestore(FIREBASE_APP);
+        const authRes = await signInAnonymously(FIREBASE_AUTH);
+        FIREBASE_USER = authRes.user;
+        SETTINGS_STATE.backend = "firebase";
+      } catch (err) {
+        SETTINGS_STATE.backend = "local";
+      }
+      SETTINGS_STATE.initialized = true;
+      await reloadSettingsRecords();
+    }
+
+    async function fetchFirebaseRecords() {
+      if (!FIREBASE_DB) {
+        return [];
+      }
+      const out = [];
+      const q = query(collection(FIREBASE_DB, SHARED_SETTINGS_COLLECTION), orderBy("name"));
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data || typeof data !== "object" || !data.params || typeof data.params !== "object") {
+          return;
+        }
+        const fallbackName = decodeURIComponent(docSnap.id);
+        out.push({
+          id: docSnap.id,
+          name: typeof data.name === "string" && data.name.trim() ? data.name : fallbackName,
+          params: data.params,
+          source: "firebase"
+        });
+      });
+      return out;
+    }
+
+    async function reloadSettingsRecords() {
+      if (SETTINGS_STATE.backend === "firebase") {
+        try {
+          SETTINGS_STATE.records = await fetchFirebaseRecords();
+          return;
+        } catch (err) {
+          SETTINGS_STATE.backend = "local";
+        }
+      }
+      SETTINGS_STATE.records = toLocalRecords(getSavedSettingsMap());
+    }
+
+    async function refreshSavedSettingsDropdown(selectedId) {
+      await reloadSettingsRecords();
       const selectEl = document.getElementById("saved_settings_select");
-      const settingsMap = getSavedSettingsMap();
-      const names = Object.keys(settingsMap).sort((a, b) => a.localeCompare(b));
       selectEl.innerHTML = "<option value=\"\">Select saved setting...</option>";
-      for (const name of names) {
+      for (const rec of SETTINGS_STATE.records) {
         const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = rec.id;
+        opt.textContent = rec.name;
         selectEl.appendChild(opt);
       }
-      if (selectedName && settingsMap[selectedName]) {
-        selectEl.value = selectedName;
+      if (selectedId && SETTINGS_STATE.records.some(rec => rec.id === selectedId)) {
+        selectEl.value = selectedId;
       }
       document.getElementById("delete_setting_btn").disabled = !selectEl.value;
+    }
+
+    function getSelectedSettingRecord() {
+      const selectedId = normalizeSettingName(document.getElementById("saved_settings_select").value);
+      if (!selectedId) {
+        return null;
+      }
+      for (const rec of SETTINGS_STATE.records) {
+        if (rec.id === selectedId) {
+          return rec;
+        }
+      }
+      return null;
     }
 
     function readParams() {
@@ -2004,7 +2118,7 @@
       return String(rawName || "").trim();
     }
 
-    function saveCurrentSetting() {
+    async function saveCurrentSetting() {
       try {
         const nameInput = document.getElementById("saved_setting_name");
         const settingName = normalizeSettingName(nameInput.value);
@@ -2013,11 +2127,30 @@
         }
         const params = readParams();
         validateParams(params);
+        if (SETTINGS_STATE.backend === "firebase" && FIREBASE_DB) {
+          const docId = settingDocId(settingName);
+          const ref = doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, docId);
+          const existing = await getDoc(ref);
+          const payload = {
+            name: settingName,
+            params: params,
+            updatedAt: serverTimestamp(),
+            updatedByUid: FIREBASE_USER ? FIREBASE_USER.uid : null
+          };
+          if (!existing.exists()) {
+            payload.createdAt = serverTimestamp();
+            payload.createdByUid = FIREBASE_USER ? FIREBASE_USER.uid : null;
+          }
+          await setDoc(ref, payload, { merge: true });
+          await refreshSavedSettingsDropdown(docId);
+          setStatus("Saved shared setting \"" + settingName + "\".", false);
+          return;
+        }
         const settingsMap = getSavedSettingsMap();
         settingsMap[settingName] = params;
         writeSavedSettingsMap(settingsMap);
-        refreshSavedSettingsDropdown(settingName);
-        setStatus("Saved setting \"" + settingName + "\".", false);
+        await refreshSavedSettingsDropdown(settingName);
+        setStatus("Saved local setting \"" + settingName + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2025,44 +2158,48 @@
 
     async function loadSelectedSetting() {
       try {
-        const selectEl = document.getElementById("saved_settings_select");
-        const settingName = normalizeSettingName(selectEl.value);
-        if (!settingName) {
+        const selected = getSelectedSettingRecord();
+        if (!selected) {
           document.getElementById("delete_setting_btn").disabled = true;
           return;
         }
-        const settingsMap = getSavedSettingsMap();
-        if (!settingsMap[settingName]) {
-          throw new Error("Saved setting not found: " + settingName);
-        }
-        applyParamsToInputs(settingsMap[settingName]);
-        document.getElementById("saved_setting_name").value = settingName;
+        applyParamsToInputs(selected.params);
+        document.getElementById("saved_setting_name").value = selected.name;
         document.getElementById("delete_setting_btn").disabled = false;
-        setStatus("Loaded setting \"" + settingName + "\".", false);
+        const sourceLabel = selected.source === "firebase" ? "shared" : "local";
+        setStatus("Loaded " + sourceLabel + " setting \"" + selected.name + "\".", false);
         await render();
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
     }
 
-    function deleteSelectedSetting() {
+    async function deleteSelectedSetting() {
       try {
-        const selectEl = document.getElementById("saved_settings_select");
-        const settingName = normalizeSettingName(selectEl.value);
-        if (!settingName) {
+        const selected = getSelectedSettingRecord();
+        if (!selected) {
           throw new Error("Select a saved setting to delete.");
         }
-        const settingsMap = getSavedSettingsMap();
-        if (!settingsMap[settingName]) {
-          throw new Error("Saved setting not found: " + settingName);
+        if (SETTINGS_STATE.backend === "firebase" && FIREBASE_DB) {
+          await deleteDoc(doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, selected.id));
+          await refreshSavedSettingsDropdown("");
+          if (document.getElementById("saved_setting_name").value === selected.name) {
+            document.getElementById("saved_setting_name").value = "";
+          }
+          setStatus("Deleted shared setting \"" + selected.name + "\".", false);
+          return;
         }
-        delete settingsMap[settingName];
+        const settingsMap = getSavedSettingsMap();
+        if (!settingsMap[selected.name]) {
+          throw new Error("Saved setting not found: " + selected.name);
+        }
+        delete settingsMap[selected.name];
         writeSavedSettingsMap(settingsMap);
-        refreshSavedSettingsDropdown("");
-        if (document.getElementById("saved_setting_name").value === settingName) {
+        await refreshSavedSettingsDropdown("");
+        if (document.getElementById("saved_setting_name").value === selected.name) {
           document.getElementById("saved_setting_name").value = "";
         }
-        setStatus("Deleted setting \"" + settingName + "\".", false);
+        setStatus("Deleted local setting \"" + selected.name + "\".", false);
       } catch (err) {
         setStatus(err && err.message ? err.message : String(err), true);
       }
@@ -2407,9 +2544,14 @@
       render();
     }, 500);
 
-    setDefaults();
-    refreshSavedSettingsDropdown("");
-    render();
+    async function bootApp() {
+      setDefaults();
+      await initSettingsStore();
+      await refreshSavedSettingsDropdown("");
+      await render();
+    }
+
+    bootApp();
   </script>
 </body>
 </html>
