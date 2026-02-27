@@ -84,8 +84,9 @@
     .inputs {
       display: grid;
       gap: 12px;
-      max-height: calc(100vh - 80px);
+      max-height: calc(100vh - 180px);
       overflow: auto;
+      padding-bottom: 12px;
     }
 
     fieldset {
@@ -560,6 +561,7 @@
     const SETTINGS_STATE = {
       backend: "firebase",
       initialized: false,
+      lastError: "",
       records: []
     };
     let FIREBASE_APP = null;
@@ -1950,6 +1952,19 @@
       }
     }
 
+    function errorToText(err) {
+      if (!err) return "";
+      if (err.code && err.message) return String(err.code) + ": " + String(err.message);
+      if (err.code) return String(err.code);
+      if (err.message) return String(err.message);
+      return String(err);
+    }
+
+    function sharedSettingsUnavailableMessage() {
+      const base = "Shared settings are unavailable because Firebase is not connected.";
+      return SETTINGS_STATE.lastError ? (base + " " + SETTINGS_STATE.lastError) : base;
+    }
+
     async function initSettingsStore() {
       if (SETTINGS_STATE.initialized) {
         return;
@@ -1961,8 +1976,10 @@
         const authRes = await signInAnonymously(FIREBASE_AUTH);
         FIREBASE_USER = authRes.user;
         SETTINGS_STATE.backend = "firebase";
+        SETTINGS_STATE.lastError = "";
       } catch (err) {
         SETTINGS_STATE.backend = "unavailable";
+        SETTINGS_STATE.lastError = errorToText(err);
         SETTINGS_STATE.records = [];
       }
       SETTINGS_STATE.initialized = true;
@@ -1971,7 +1988,7 @@
 
     async function fetchFirebaseRecords() {
       if (!FIREBASE_DB) {
-        throw new Error("Shared settings are unavailable because Firebase is not connected.");
+        throw new Error(sharedSettingsUnavailableMessage());
       }
       const out = [];
       const q = query(collection(FIREBASE_DB, SHARED_SETTINGS_COLLECTION), orderBy("name"));
@@ -2116,7 +2133,7 @@
         const params = readParams();
         validateParams(params);
         if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
-          throw new Error("Shared settings are unavailable because Firebase is not connected.");
+          throw new Error(sharedSettingsUnavailableMessage());
         }
         const docId = settingDocId(settingName);
         const ref = doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, docId);
@@ -2163,7 +2180,7 @@
           throw new Error("Select a saved setting to delete.");
         }
         if (!FIREBASE_DB || SETTINGS_STATE.backend !== "firebase") {
-          throw new Error("Shared settings are unavailable because Firebase is not connected.");
+          throw new Error(sharedSettingsUnavailableMessage());
         }
         await deleteDoc(doc(FIREBASE_DB, SHARED_SETTINGS_COLLECTION, selected.id));
         await refreshSavedSettingsDropdown("");
