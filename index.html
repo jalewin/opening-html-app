@@ -60,6 +60,13 @@
       font-size: 14px;
     }
 
+    .version-line {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #3e4b5e;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 390px 1fr;
@@ -288,6 +295,7 @@
     <section class="title">
       <h1>Arched Collision Tool</h1>
       <p>Single-file browser app for max opening angle and 3D geometry visualization.</p>
+      <div id="app_version" class="version-line"></div>
     </section>
 
     <section class="layout">
@@ -540,6 +548,7 @@
       appId: "1:708789827921:web:79b470746393b3655dfb70"
     };
     const SHARED_SETTINGS_COLLECTION = "sharedSettings";
+    const APP_VERSION = "2026-02-27 / 9e02df7";
 
     let LAST_RENDER = null;
     const APP_STATE = {
@@ -2507,6 +2516,7 @@
     }, 500);
 
     async function bootApp() {
+      document.getElementById("app_version").textContent = "Version: " + APP_VERSION;
       setDefaults();
       await initSettingsStore();
       await refreshSavedSettingsDropdown("");
